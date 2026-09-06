@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "document_type": "pilot_plan",
+  "updated_at": "2026-09-06",
+  "implementation_status": "not_implemented",
+  "purpose": "Declare pilot order and evidence required before the second recovery. This file is planning data, not an executable scheduler or proof of enforcement.",
+  "readiness_conditions": {
+    "R1": "First pilot has a frozen, source-linked reference bundle and declared gaps.",
+    "R2": "All required scoped visual and interaction checks pass for the first pilot.",
+    "R3": "A clean export builds and runs without archive/model calls or required remote assets.",
+    "R4": "Missing-source, interruption, budget and isolation tests pass.",
+    "R5": "The engine uses configuration without first-site-specific branches; evidence records tested revisions."
+  },
+  "pilots": [
+    {
+      "id": "uncleweed",
+      "order": 1,
+      "domain": "uncleweed.net",
+      "requested_period": null,
+      "selected_capture_period": null,
+      "status": "planned_first_pilot",
+      "discovery_status": "not_started_in_resurrection",
+      "reference_status": "not_frozen",
+      "validation_status": "not_run",
+      "notes": "Choose historical evidence before generation. An existing modern portal is not the historical visual reference. Do not import private project materials into this public repository."
+    },
+    {
+      "id": "spark-online",
+      "order": 2,
+      "domain": "spark-online.com",
+      "requested_period": {
+        "approximate_year": 1998,
+        "basis": "Product owner's requested starting point",
+        "verified": false
+      },
+      "selected_capture_period": null,
+      "status": "deferred_until_ready",
+      "depends_on": "uncleweed",
+      "required_readiness_conditions": ["R1", "R2", "R3", "R4", "R5"],
+      "readiness_status": "not_evaluated",
+      "discovery_status": "not_started",
+      "validation_status": "not_run",
+      "notes": "Begin discovery only after readiness conditions pass. Verify actual historical captures and site identity then. Do not infer a launch date or substitute a later unrelated site."
+    }
+  ]
+}
