@@ -167,6 +167,11 @@ Against the committed fixtures, with no network at all:
 pnpm run acquire:fixture
 ```
 
+That command owns `tmp/demo-acquisition` as disposable demo output and clears
+it before each run, but only when the job there is the demo's own, so a listed
+verification command never depends on prior working-tree state and never
+deletes a job it did not create.
+
 Re-render a report from a job already on disk, which makes no requests:
 
 ```
