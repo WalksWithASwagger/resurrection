@@ -1,0 +1,67 @@
+/**
+ * Shared setup for the acquisition suite.
+ *
+ * Every helper here runs against the committed fixture manifest and a
+ * throwaway output directory. Nothing in this file, or anything it constructs,
+ * can open a socket: the transport is the fixture replayer and name resolution
+ * comes from the manifest's declared addresses.
+ */
+
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { createTestClock } from '../../src/clock.ts';
+import { loadProjectConfig, type ProjectConfig } from '../../src/config.ts';
+import {
+  createFixtureTransport,
+  loadFixtureManifest,
+  type FixtureManifest,
+  type FixtureTransportHandle,
+} from '../../src/fixture-transport.ts';
+
+const FIXTURE_ROOT = fileURLToPath(new URL('../../fixtures/demo-site/', import.meta.url));
+
+export const MANIFEST_PATH = join(FIXTURE_ROOT, 'manifest.json');
+export const PROJECT_PATH = join(FIXTURE_ROOT, 'project.json');
+
+/** A fixed start time, so every ISO timestamp in a report is deterministic. */
+export const FIXTURE_EPOCH = Date.parse('2026-01-01T00:00:00.000Z');
+
+export async function demoManifest(): Promise<FixtureManifest> {
+  return await loadFixtureManifest(MANIFEST_PATH);
+}
+
+export async function demoConfig(outputDirectory: string): Promise<ProjectConfig> {
+  const config = await loadProjectConfig(PROJECT_PATH);
+  return { ...config, outputDirectory };
+}
+
+export async function withTempDirectory<T>(run: (directory: string) => Promise<T>): Promise<T> {
+  const directory = await mkdtemp(join(tmpdir(), 'resurrection-test-'));
+  try {
+    return await run(directory);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+export interface Harness {
+  config: ProjectConfig;
+  handle: FixtureTransportHandle;
+  clock: ReturnType<typeof createTestClock>;
+}
+
+export async function harness(directory: string, manifest?: FixtureManifest): Promise<Harness> {
+  return {
+    config: await demoConfig(directory),
+    handle: createFixtureTransport(manifest ?? (await demoManifest())),
+    clock: createTestClock(FIXTURE_EPOCH),
+  };
+}
+
+/** URLs the fixture transport was actually asked for, in order. */
+export function requestedUrls(handle: FixtureTransportHandle): string[] {
+  return handle.calls.map((call) => call.url);
+}
