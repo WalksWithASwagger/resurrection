@@ -48,9 +48,10 @@
   "verification": {
     "commands": [
       "python3 -m json.tool agentic/contract.json",
-      "python3 -m json.tool benchmarks/pilots.json"
+      "python3 -m json.tool benchmarks/pilots.json",
+      "pnpm test"
     ],
-    "note": "The repository is at specification stage and carries no executable package yet. The M1 acquisition package must add its test command here in the same pull request that introduces it, so this list never describes verification the repository cannot perform."
+    "note": "A pull request that introduces or changes an executable command must add it here in the same pull request, so this list never describes verification the repository cannot perform. The package skeleton and its test command landed with the decode step (#4); the M1 acquisition package extends them rather than creating a second package."
   },
   "issue_quality": {
     "required_sections": [
