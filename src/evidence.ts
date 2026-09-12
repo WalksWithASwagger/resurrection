@@ -23,6 +23,7 @@ import type { BudgetSpend, Budgets } from './budget.ts';
 import type { ProjectConfig } from './config.ts';
 import {
   isComplete,
+  promotableAsReference,
   referenceEligible,
   type ArchiveInjectionRecord,
   type AssetLookup,
@@ -36,10 +37,21 @@ import type { AssetCaptureSource, DigestObservation } from './resolve-asset.ts';
 import { captureDistanceSeconds, expandTimestamp } from './wayback.ts';
 import type { CaptureSelection } from './select.ts';
 import { zeroOutcomeCounts, type Failure, type ItemOutcome, type OutcomeRecord, type UnattemptedReason } from './outcomes.ts';
+import { weakestSignal, type FidelityBand, type FidelityScore } from './fidelity.ts';
 
 export const EVIDENCE_FILE = 'evidence.json';
-/** 3 added the per-asset capture resolution section (issue #6). */
-export const EVIDENCE_SCHEMA_VERSION = 3;
+/**
+ * 3 added the per-asset capture resolution section (issue #6).
+ * 4 added the fidelity section and the per-file fidelity digest (issue #8).
+ *
+ * The job state version is deliberately *not* bumped alongside it. A version 3
+ * job carries no `fidelity` on its items, and that is a visible absence rather
+ * than a wrong number: it reports zero scored pages, and one `reclassify` run
+ * fills it in from bytes already stored, for zero requests. The 2 to 3 bump
+ * was different in kind, because a version 2 job would have reported every
+ * asset as having zero captures, which reads as a fact rather than a gap.
+ */
+export const EVIDENCE_SCHEMA_VERSION = 4;
 
 export interface IndexedEntry {
   originalUrl: string;
@@ -114,6 +126,20 @@ export interface RecoveredFile {
    */
   outcome: ItemOutcome | null;
   referenceEligible: boolean;
+  /**
+   * The graded verdict (issue #8), or null when nothing was scored. It never
+   * contradicts `referenceEligible` above: it exists only for files that are
+   * already eligible, and it can only narrow them.
+   */
+  fidelity: FidelityDigest | null;
+}
+
+/** The score in one line. The full breakdown lives in `fidelity.scored`. */
+export interface FidelityDigest {
+  score: number;
+  band: FidelityBand;
+  promotionBlocked: boolean;
+  overridden: boolean;
 }
 
 /**
@@ -164,6 +190,7 @@ export type GapKind =
   | 'excluded-capture-only'
   | 'temporally-distant-asset'
   | 'asset-content-drift'
+  | 'low-fidelity'
   | 'partial-inventory';
 
 export interface GapEntry {
@@ -226,6 +253,24 @@ export interface EvidenceReport {
     withoutCapture: number;
     temporallyDistant: number;
   };
+  /**
+   * Graded per-page fidelity (issue #8). Every signal is written out with its
+   * weight and its contribution, so a reviewer can see which one moved a score
+   * rather than being handed a composite to trust.
+   */
+  fidelity: {
+    scored: FidelityScore[];
+    counts: {
+      scored: number;
+      accept: number;
+      acceptWithWarning: number;
+      reviewRequired: number;
+      /** Eligible on both axes: outcome `ok` and not blocked by the score. */
+      promotable: number;
+      /** Blocks lifted by an override recorded in project configuration. */
+      overridden: number;
+    };
+  };
   counts: {
     items: number;
     indexed: number;
@@ -272,8 +317,10 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
   const gaps: GapEntry[] = [];
   const byOutcome = zeroOutcomeCounts();
   const assets: AssetResolutionEntry[] = [];
+  const scored: FidelityScore[] = [];
   let skipped = 0;
   let eligible = 0;
+  let promotable = 0;
 
   for (const item of state.items) {
     const resolution = item.capture.resolution;
@@ -382,9 +429,34 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
 
     if (item.outcome !== null) byOutcome[item.outcome.outcome] += 1;
 
+    // A blocked page and an overridden one both raise the gap. An override is
+    // a recorded decision to proceed, never a reason to stop reporting.
+    if (item.fidelity !== null) {
+      scored.push(item.fidelity);
+      if (item.fidelity.band === 'review-required') {
+        const weakest = weakestSignal(item.fidelity);
+        gaps.push({
+          kind: 'low-fidelity',
+          originalUrl: item.originalUrl,
+          detail:
+            `fidelity ${item.fidelity.score.toFixed(4)} is below the review-required threshold ` +
+            `${String(item.fidelity.thresholds.acceptWithWarning)}; weakest signal ${weakest?.name ?? 'none'} ` +
+            `at ${String(weakest?.value ?? 0)} (${weakest?.detail ?? 'no signal was measured'})` +
+            (item.fidelity.override === null
+              ? ''
+              : `; promotion overridden by ${item.fidelity.override.recordedBy}: ${item.fidelity.override.reason}`),
+          remedy:
+            item.fidelity.override === null
+              ? 'select an alternative capture, or record an explicit override before freezing this as a reference'
+              : 'the override is recorded; confirm it still holds before freezing this as a reference',
+        });
+      }
+    }
+
     if (isComplete(item) && item.fetch?.bodyHash != null && item.fetch.storePath != null) {
       const eligibleHere = referenceEligible(item);
       if (eligibleHere) eligible += 1;
+      if (promotableAsReference(item)) promotable += 1;
       recoveredFiles.push({
         originalUrl: item.originalUrl,
         localPath: item.localPath,
@@ -395,6 +467,15 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
         servedTimestamp: item.capture.servedTimestamp,
         outcome: item.outcome?.outcome ?? null,
         referenceEligible: eligibleHere,
+        fidelity:
+          item.fidelity === null
+            ? null
+            : {
+                score: item.fidelity.score,
+                band: item.fidelity.band,
+                promotionBlocked: item.fidelity.promotionBlocked,
+                overridden: item.fidelity.override !== null,
+              },
       });
 
       // Validated bytes that are not content are the silent failure issue #5
@@ -546,6 +627,17 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
       withoutCapture: assets.filter((entry) => entry.resolvedTimestamp === null).length,
       temporallyDistant: assets.filter((entry) => entry.temporallyDistant).length,
     },
+    fidelity: {
+      scored,
+      counts: {
+        scored: scored.length,
+        accept: scored.filter((entry) => entry.band === 'accept').length,
+        acceptWithWarning: scored.filter((entry) => entry.band === 'accept-with-warning').length,
+        reviewRequired: scored.filter((entry) => entry.band === 'review-required').length,
+        promotable,
+        overridden: scored.filter((entry) => entry.override !== null).length,
+      },
+    },
     counts: {
       items: state.items.length,
       indexed: indexed.length,
@@ -614,6 +706,10 @@ export function summarize(report: EvidenceReport): string {
     `skipped        ${counts.skipped}`,
     `recovered      ${counts.recoveredFiles} files with validated bytes`,
     `eligible       ${counts.referenceEligible} of those may become an M2 reference`,
+    `fidelity       ${report.fidelity.counts.scored} pages scored ` +
+      `(${report.fidelity.counts.accept} accept, ${report.fidelity.counts.acceptWithWarning} with warning, ` +
+      `${report.fidelity.counts.reviewRequired} review-required); ` +
+      `${report.fidelity.counts.promotable} promotable, ${report.fidelity.counts.overridden} overridden`,
     `outcomes       ${outcomeLine(counts.byOutcome)}`,
     `assets         ${report.assets.resolved.length} resolved (${report.assets.resolvedFromInventory} from the inventory, ` +
       `${report.assets.lookups.length} per-URL lookups costing ${report.assets.lookupIndexRequests} index requests), ` +

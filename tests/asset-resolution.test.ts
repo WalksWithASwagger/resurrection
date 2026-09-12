@@ -254,7 +254,8 @@ test('the report records, per asset, the page time, the capture time and the del
   await withTempDirectory(async (directory) => {
     const { report } = await acquire(directory);
 
-    assert.equal(report.schemaVersion, 3);
+    // 4 since issue #8 added the fidelity section and the per-file digest.
+    assert.equal(report.schemaVersion, 4);
     assert.equal(report.assets.windowDays, 365);
     assert.equal(report.assets.resolved.length, 8);
     for (const entry of report.assets.resolved) {

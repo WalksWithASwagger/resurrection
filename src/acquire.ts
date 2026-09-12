@@ -163,10 +163,10 @@ export async function runAcquisition(options: AcquisitionOptions): Promise<Acqui
     await saveJob(directory, state);
   }
 
-  // Classification is a collection-wide pass over bytes already stored, so it
-  // runs once the fetch loop is over and costs no requests. The same pass is
-  // what `reclassify` re-runs later.
-  await classifyCollection(state, store);
+  // Classification and fidelity scoring are one collection-wide pass over
+  // bytes already stored, so they run once the fetch loop is over and cost no
+  // requests. The same pass is what `reclassify` re-runs later.
+  await classifyCollection(state, store, config.fidelity);
   await saveJob(directory, state);
 
   const report = buildEvidenceReport(state, config);
@@ -914,6 +914,7 @@ function newItem(input: {
     fetch: null,
     encoding: null,
     outcome: null,
+    fidelity: null,
     notes: [],
   };
 }

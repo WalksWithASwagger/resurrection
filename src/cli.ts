@@ -16,6 +16,7 @@ import { buildEvidenceReport, summarize, writeEvidenceReport } from './evidence.
 import { createFixtureTransport, loadFixtureManifest } from './fixture-transport.ts';
 import { loadJob, type JobState } from './job.ts';
 import { reclassifyJob } from './reclassify.ts';
+import { DEFAULT_FIDELITY } from './fidelity.ts';
 import { DEFAULT_ASSET_RESOLUTION } from './resolve-asset.ts';
 import { DEFAULT_SELECTION } from './select.ts';
 import { systemResolver } from './destination.ts';
@@ -34,9 +35,11 @@ const USAGE = `resurrection — bounded archive acquisition
   report --job <dir>
     Re-render the evidence summary from a job on disk. Makes no requests.
 
-  reclassify --job <dir>
-    Re-run outcome classification over bytes already stored, then re-render
-    the report. Reads the body store, opens no socket, refetches nothing.
+  reclassify --job <dir> [--config <file>]
+    Re-run outcome classification and fidelity scoring over bytes already
+    stored, then re-render the report. Reads the body store, opens no socket,
+    refetches nothing. Without --config the documented default fidelity
+    weights, bands and tuning apply and no promotion override is recorded.
 `;
 
 export async function main(argv: readonly string[]): Promise<number> {
@@ -146,11 +149,18 @@ async function reclassifyCommand(flags: Record<string, string>): Promise<number>
     return 1;
   }
 
-  const { state, summary } = await reclassifyJob(directory);
-  await renderReport(state, directory);
+  const configPath = flags['config'];
+  const fidelity = configPath === undefined ? DEFAULT_FIDELITY : (await loadProjectConfig(configPath)).fidelity;
+
+  const { state, summary } = await reclassifyJob(directory, fidelity);
+  await renderReport(state, directory, fidelity);
   process.stdout.write(
     `reclassified   ${summary.itemsClassified} items from ${summary.storeReads} stored bodies, ` +
       `0 requests\n`,
+  );
+  process.stdout.write(
+    `scored         ${summary.fidelity.scored} pages; ${summary.fidelity.gatedByOutcome} gated by outcome, ` +
+      `${summary.fidelity.nonMarkup} non-markup bodies\n`,
   );
   if (summary.templates.length > 0) {
     process.stdout.write(`templates      ${summary.templates.map((t) => t.id).join(' ')}\n`);
@@ -168,7 +178,11 @@ async function reclassifyCommand(flags: Record<string, string>): Promise<number>
  * defaults: the report reads what was actually applied off the job's own
  * inventory runs and capture records, not off a config supplied here.
  */
-async function renderReport(state: JobState, directory: string): Promise<void> {
+async function renderReport(
+  state: JobState,
+  directory: string,
+  fidelity = DEFAULT_FIDELITY,
+): Promise<void> {
   const report = buildEvidenceReport(state, {
     projectId: state.projectId,
     scope: state.scope,
@@ -185,6 +199,10 @@ async function renderReport(state: JobState, directory: string): Promise<void> {
     // Each resolved asset carries the window that was actually applied to it;
     // this is only the section-level default for a job that resolved none.
     assetResolution: DEFAULT_ASSET_RESOLUTION,
+    // Each score carries its own per-signal weights and its own band
+    // thresholds, so the report stays auditable even when this is the default
+    // and the job was scored under a project's own policy.
+    fidelity,
     candidateFilters: [],
     outputDirectory: directory,
   });

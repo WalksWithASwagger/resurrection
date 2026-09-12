@@ -322,6 +322,12 @@ declaration override was applied.
 `inventory` carries the query strings issued, the candidate filters applied,
 the timeline of captures held back, and whether the inventory is partial.
 
+`fidelity` carries the graded per-page score (issue #8) with its full
+per-signal breakdown, so a reviewer can see which signal moved a score rather
+than only its composite. It is an additional graded signal, not a replacement
+for M3's binary acceptance checks, and it narrows promotion without touching
+`counts.referenceEligible` above: see [fidelity](FIDELITY.md).
+
 `assets` carries, per dependency: the page that referenced it and that page's
 capture time, the capture the resolver chose, the capture the provider served,
 both distances in seconds, the declared window, the flag state, whether it came

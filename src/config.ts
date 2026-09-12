@@ -13,6 +13,18 @@ import { readFile } from 'node:fs/promises';
 
 import { DEFAULT_BUDGETS, type Budgets } from './budget.ts';
 import { DEFAULT_CANDIDATE_FILTERS, DEFAULT_CDX_ENDPOINT, parseCdxFilter, type MatchType } from './cdx.ts';
+import {
+  DEFAULT_FIDELITY,
+  DEFAULT_FIDELITY_THRESHOLDS,
+  DEFAULT_FIDELITY_TUNING,
+  DEFAULT_FIDELITY_WEIGHTS,
+  FIDELITY_SIGNALS,
+  type FidelityConfig,
+  type FidelityOverride,
+  type FidelitySignalName,
+  type FidelityThresholds,
+  type FidelityTuning,
+} from './fidelity.ts';
 import { DEFAULT_ASSET_RESOLUTION, type AssetResolutionConfig } from './resolve-asset.ts';
 import { DEFAULT_REPLAY_ENDPOINT } from './wayback.ts';
 import {
@@ -61,6 +73,8 @@ export interface ProjectConfig {
   selection: SelectionConfig;
   /** How far a dependency's capture may sit from its referring page. */
   assetResolution: AssetResolutionConfig;
+  /** Signal weights, bands and recorded promotion overrides (issue #8). */
+  fidelity: FidelityConfig;
   /**
    * CDX filter expressions an indexed row must satisfy to become an
    * acquisition candidate. A row that fails one is kept as timeline evidence.
@@ -191,6 +205,8 @@ export function parseProjectConfig(value: unknown, source: string): ProjectConfi
       : stringArray(raw['candidateFilters'], 'candidateFilters', source);
   for (const expression of candidateFilters) parseCdxFilter(expression);
 
+  const fidelity = parseFidelity(optionalObject(raw['fidelity']), source);
+
   return {
     projectId,
     scope,
@@ -199,9 +215,82 @@ export function parseProjectConfig(value: unknown, source: string): ProjectConfi
     discovery,
     selection: { policy, clusterWindowDays },
     assetResolution: { windowDays },
+    fidelity,
     candidateFilters,
     outputDirectory: requireString(raw['outputDirectory'], 'outputDirectory', source),
   };
+}
+
+/**
+ * The fidelity block, defaulted field by field.
+ *
+ * Weights and band thresholds are configuration, not literals in the scorer,
+ * so changing the policy is a reviewable diff in one place. Every field is
+ * optional: a project that declares nothing gets the documented defaults in
+ * `src/fidelity.ts`, which is what every fixture project does today.
+ */
+function parseFidelity(raw: Record<string, unknown>, source: string): FidelityConfig {
+  const weightsRaw = numberRecord(raw['weights'], 'fidelity.weights', source);
+  const weights = { ...DEFAULT_FIDELITY_WEIGHTS } as Record<FidelitySignalName, number>;
+  for (const [name, weight] of Object.entries(weightsRaw)) {
+    if (!FIDELITY_SIGNALS.includes(name as FidelitySignalName)) {
+      throw new Error(
+        `project config ${source}: fidelity.weights.${name} is not a signal; expected one of ${FIDELITY_SIGNALS.join(', ')}`,
+      );
+    }
+    if (weight < 0) throw new Error(`project config ${source}: fidelity.weights.${name} must not be negative`);
+    weights[name as FidelitySignalName] = weight;
+  }
+  if (Object.values(weights).every((weight) => weight === 0)) {
+    throw new Error(`project config ${source}: fidelity.weights must leave at least one signal above zero`);
+  }
+
+  const thresholdsRaw = optionalObject(raw['thresholds']);
+  const thresholds: FidelityThresholds = {
+    accept: optionalNumber(
+      thresholdsRaw['accept'],
+      DEFAULT_FIDELITY_THRESHOLDS.accept,
+      'fidelity.thresholds.accept',
+      source,
+    ),
+    acceptWithWarning: optionalNumber(
+      thresholdsRaw['acceptWithWarning'],
+      DEFAULT_FIDELITY_THRESHOLDS.acceptWithWarning,
+      'fidelity.thresholds.acceptWithWarning',
+      source,
+    ),
+  };
+  if (thresholds.accept < thresholds.acceptWithWarning) {
+    throw new Error(
+      `project config ${source}: fidelity.thresholds.accept must not be below acceptWithWarning`,
+    );
+  }
+
+  const tuningRaw = optionalObject(raw['tuning']);
+  const tuning: FidelityTuning = { ...DEFAULT_FIDELITY_TUNING };
+  for (const key of Object.keys(DEFAULT_FIDELITY_TUNING) as (keyof FidelityTuning)[]) {
+    tuning[key] = optionalNumber(tuningRaw[key], DEFAULT_FIDELITY_TUNING[key], `fidelity.tuning.${key}`, source);
+  }
+
+  const overrides: FidelityOverride[] = [];
+  const overridesRaw = raw['overrides'];
+  if (overridesRaw !== undefined) {
+    if (!Array.isArray(overridesRaw)) {
+      throw new Error(`project config ${source}: fidelity.overrides must be an array`);
+    }
+    for (const [index, entry] of overridesRaw.entries()) {
+      const record = requireObject(entry, `fidelity.overrides[${String(index)}]`, source);
+      overrides.push({
+        originalUrl: requireString(record['originalUrl'], `fidelity.overrides[${String(index)}].originalUrl`, source),
+        // An override without a stated reason and a named person is not a
+        // recorded decision, it is a silent one. Both are required.
+        reason: requireString(record['reason'], `fidelity.overrides[${String(index)}].reason`, source),
+        recordedBy: requireString(record['recordedBy'], `fidelity.overrides[${String(index)}].recordedBy`, source),
+      });
+    }
+  }
+
+  return { weights, thresholds, tuning, overrides: overrides.length === 0 ? DEFAULT_FIDELITY.overrides : overrides };
 }
 
 function optionalString(value: unknown, fallback: string): string {

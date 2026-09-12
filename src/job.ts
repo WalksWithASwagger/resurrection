@@ -20,6 +20,7 @@ import type { BudgetSpend, Budgets } from './budget.ts';
 import type { CdxQuery } from './cdx.ts';
 import type { ScopeConfig } from './config.ts';
 import type { LinkRelation } from './discover.ts';
+import type { FidelityScore } from './fidelity.ts';
 import type { Failure, OutcomeRecord, UnattemptedReason } from './outcomes.ts';
 import type { AssetResolution } from './resolve-asset.ts';
 import type { CaptureCandidate, CaptureSelection } from './select.ts';
@@ -158,6 +159,13 @@ export interface WorkItem {
    * writes by hand. Null until a classification pass has run.
    */
   outcome: OutcomeRecord | null;
+  /**
+   * The graded fidelity score (issue #8), or null. Null is the common case and
+   * it is not a failure: an item whose outcome is not `ok` is never scored,
+   * and neither is a binary body. Written by the same pass that writes
+   * `outcome`, never by the fetch loop.
+   */
+  fidelity: FidelityScore | null;
   notes: string[];
 }
 
@@ -286,6 +294,21 @@ export function isComplete(item: WorkItem): boolean {
  */
 export function referenceEligible(item: WorkItem): boolean {
   return isComplete(item) && item.outcome?.referenceEligible === true;
+}
+
+/**
+ * Eligible on the content axis *and* not blocked on the fidelity axis.
+ *
+ * This is the whole of issue #8's composition with issue #5, in one
+ * expression, and the order is the claim: `referenceEligible` is evaluated
+ * first and it wins. A page that is not `ok` is never scored, so no score can
+ * argue with it; a score can only narrow what is already eligible, and an
+ * operator override recorded in project configuration can lift the fidelity
+ * block and nothing else. There is no second eligibility field: this reads
+ * the one above.
+ */
+export function promotableAsReference(item: WorkItem): boolean {
+  return referenceEligible(item) && item.fidelity?.promotionBlocked !== true;
 }
 
 export async function saveJob(directory: string, state: JobState): Promise<void> {

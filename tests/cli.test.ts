@@ -143,6 +143,34 @@ test('reclassify re-runs classification over stored bytes and reports zero reque
   });
 });
 
+test('reclassify applies a project\'s own fidelity policy when it is given one', async () => {
+  await withTempDirectory(async (directory) => {
+    await cli([
+      'acquire',
+      '--config',
+      PROJECT_PATH,
+      '--transport',
+      'fixture',
+      '--fixture-manifest',
+      MANIFEST_PATH,
+      '--output',
+      directory,
+    ]);
+
+    // `--config` is an option on an existing command rather than a new one, so
+    // it is verified here rather than appended to the contract's command list,
+    // which would deepen the acquire-then-reclassify ordering chain for no
+    // extra coverage. Both forms must agree: the demo project declares no
+    // fidelity block, so its policy is the documented default.
+    const defaulted = await cli(['reclassify', '--job', directory]);
+    const configured = await cli(['reclassify', '--job', directory, '--config', PROJECT_PATH]);
+
+    assert.equal(configured.code, 0);
+    assert.match(configured.stdout, /scored\s+\d+ pages; \d+ gated by outcome/u);
+    assert.equal(configured.stdout, defaulted.stdout);
+  });
+});
+
 test('reclassify refuses a directory that holds no job', async () => {
   await withTempDirectory(async (directory) => {
     const result = await cli(['reclassify', '--job', directory]);

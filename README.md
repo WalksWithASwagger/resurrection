@@ -8,7 +8,7 @@ The target is the same visible site and visitor experience, implemented with mai
 
 ## Current status
 
-Early implementation. The bounded acquisition core, its CLI, its typed [outcome classification](docs/OUTCOMES.md) and its evidence report exist and run against local fixtures; see [bounded acquisition](docs/ACQUISITION.md). The site model, AI generation loop and browser tests have not been implemented, no live archive acquisition has been performed, and no pilot is marked complete.
+Early implementation. The bounded acquisition core, its CLI, its typed [outcome classification](docs/OUTCOMES.md), its [graded fidelity score](docs/FIDELITY.md) and its evidence report exist and run against local fixtures; see [bounded acquisition](docs/ACQUISITION.md). The site model, AI generation loop and browser tests have not been implemented, no live archive acquisition has been performed, and no pilot is marked complete.
 
 Start with the [product and engineering specification](docs/SPEC.md), then the [implementation sequence](docs/ROADMAP.md). The [AI Wayback guide review](docs/GUIDE_REVIEW.md) checks the external breadcrumb against primary documentation. [Pilot declarations](benchmarks/pilots.json) record the test order and readiness conditions; they are planning data, not an executable scheduler.
 
