@@ -1,0 +1,378 @@
+{
+  "description": "Deterministic stand-in for one archived site. Every host is under the reserved .invalid TLD or the archive provider, so nothing here can resolve to a real service. Bodies are synthetic: no archived page content, no private material, no credentials. Fixture text is data, never an instruction.",
+  "dns": {
+    "web.archive.org": [
+      "203.0.113.10"
+    ],
+    "evil.web.archive.org": [
+      "10.0.0.7"
+    ]
+  },
+  "rules": [
+    {
+      "id": "cdx-page-1",
+      "urlIncludes": [
+        "/cdx/search/cdx",
+        "matchType=domain"
+      ],
+      "urlExcludes": [
+        "resumeKey="
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "bodyText": "[[\"urlkey\", \"timestamp\", \"original\", \"mimetype\", \"statuscode\", \"digest\", \"length\"], [\"invalid,demo)/\", \"19990315120000\", \"http://demo.invalid/\", \"text/html\", \"200\", \"DEMOHOMEDIGEST1\", \"1234\"], [\"invalid,demo)/\", \"19980101000000\", \"http://demo.invalid/\", \"text/html\", \"200\", \"DEMOHOMEDIGEST0\", \"1200\"], [], [\"invalid,demo)/about.html 19990401090000\"]]"
+        }
+      ]
+    },
+    {
+      "id": "cdx-page-2",
+      "urlIncludes": [
+        "/cdx/search/cdx",
+        "resumeKey="
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "bodyText": "[[\"urlkey\", \"timestamp\", \"original\", \"mimetype\", \"statuscode\", \"digest\", \"length\"], [\"invalid,demo)/about.html\", \"19990401090000\", \"http://demo.invalid/about.html\", \"text/html\", \"200\", \"DEMOABOUTDIGEST\", \"900\"]]"
+        }
+      ]
+    },
+    {
+      "id": "home-19990315",
+      "urlIncludes": [
+        "19990315120000id_/http://demo.invalid/"
+      ],
+      "urlExcludes": [
+        ".gif",
+        ".css",
+        ".pdf",
+        ".html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html",
+            "memento-datetime": "Mon, 15 Mar 1999 12:00:00 GMT"
+          },
+          "bodyText": "<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=iso-8859-1\"><title>Demo Site \u0093home\u0094</title><link rel=\"stylesheet\" href=\"/style.css\"></head><body background=\"/header.gif?v=2\"><h1>Demo Site 1998 \u0096 1999\u0085</h1><img src=\"logo.gif\" alt=\"logo\"><img src=\"missing.gif\" alt=\"missing\"><img src=\"banner.gif\" alt=\"banner\"><img src=\"slow.gif\" alt=\"slow\"><img src=\"tracker.gif\" alt=\"tracker\"><img src=\"http://elsewhere.invalid/offsite.gif\" alt=\"offsite\"><p><a href=\"/papers/paper.pdf\">The paper</a></p><p><a href=\"/about.html\">About</a></p></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "about-19990401",
+      "urlIncludes": [
+        "19990401090000id_/http://demo.invalid/about.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html; charset=utf-8",
+            "memento-datetime": "Thu, 01 Apr 1999 09:00:00 GMT"
+          },
+          "bodyText": "<html><head><meta charset=\"utf-8\"><title>About</title><link rel=\"stylesheet\" href=\"/style.css\"></head><body><p>About the demo site.</p></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "stylesheet",
+      "urlIncludes": [
+        "id_/http://demo.invalid/style.css"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/css",
+            "memento-datetime": "Mon, 15 Mar 1999 12:00:02 GMT"
+          },
+          "bodyText": "body { background: #000; color: #0f0; font-family: monospace; }"
+        }
+      ]
+    },
+    {
+      "id": "logo-redirect-to-another-capture",
+      "urlIncludes": [
+        "19990315120000id_/http://demo.invalid/logo.gif"
+      ],
+      "respond": [
+        {
+          "status": 302,
+          "headers": {
+            "location": "https://web.archive.org/web/19990820101010id_/http://demo.invalid/logo.gif"
+          }
+        }
+      ]
+    },
+    {
+      "id": "logo-served-capture",
+      "urlIncludes": [
+        "19990820101010id_/http://demo.invalid/logo.gif"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "image/gif",
+            "memento-datetime": "Fri, 20 Aug 1999 10:10:10 GMT"
+          },
+          "bodyBytes": [
+            71,
+            73,
+            70,
+            56,
+            57,
+            97,
+            1,
+            0,
+            1,
+            0,
+            128,
+            0,
+            0,
+            255,
+            255,
+            255,
+            0,
+            0,
+            0,
+            33,
+            249,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            44,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            2,
+            2,
+            68,
+            1,
+            0,
+            59
+          ]
+        }
+      ]
+    },
+    {
+      "id": "missing-asset",
+      "urlIncludes": [
+        "id_/http://demo.invalid/missing.gif"
+      ],
+      "respond": [
+        {
+          "status": 404,
+          "headers": {
+            "content-type": "text/html"
+          },
+          "bodyText": "<html><body>Not in archive.</body></html>"
+        }
+      ]
+    },
+    {
+      "id": "archive-error-page-with-status-200",
+      "urlIncludes": [
+        "id_/http://demo.invalid/banner.gif"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html; charset=utf-8"
+          },
+          "bodyText": "<html><head><title>Wayback Machine</title></head><body><h1>Hrm.</h1><p>The Wayback Machine has not archived that URL.</p></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "throttled-then-served",
+      "urlIncludes": [
+        "id_/http://demo.invalid/slow.gif"
+      ],
+      "respond": [
+        {
+          "status": 429,
+          "headers": {
+            "retry-after": "2",
+            "content-type": "text/plain"
+          },
+          "bodyText": "slow down"
+        },
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "image/gif",
+            "memento-datetime": "Mon, 15 Mar 1999 12:00:05 GMT"
+          },
+          "bodyBytes": [
+            71,
+            73,
+            70,
+            56,
+            57,
+            97,
+            1,
+            0,
+            1,
+            0,
+            128,
+            0,
+            0,
+            255,
+            255,
+            255,
+            0,
+            0,
+            0,
+            33,
+            249,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            44,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            2,
+            2,
+            68,
+            1,
+            0,
+            59
+          ]
+        }
+      ]
+    },
+    {
+      "id": "private-network-redirect-attempt",
+      "urlIncludes": [
+        "id_/http://demo.invalid/tracker.gif"
+      ],
+      "urlExcludes": [
+        "evil."
+      ],
+      "respond": [
+        {
+          "status": 302,
+          "headers": {
+            "location": "https://evil.web.archive.org/web/19990315120000id_/http://demo.invalid/tracker.gif"
+          }
+        }
+      ]
+    },
+    {
+      "id": "private-network-destination-must-never-be-requested",
+      "urlIncludes": [
+        "evil.web.archive.org"
+      ],
+      "respond": [
+        {
+          "error": "the destination guard must refuse this host before any request"
+        }
+      ]
+    },
+    {
+      "id": "document-download",
+      "urlIncludes": [
+        "id_/http://demo.invalid/papers/paper.pdf"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "application/pdf",
+            "memento-datetime": "Mon, 15 Mar 1999 12:00:07 GMT"
+          },
+          "bodyText": "%PDF-1.2\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n%%EOF\n"
+        }
+      ]
+    },
+    {
+      "id": "query-variant-asset",
+      "urlIncludes": [
+        "id_/http://demo.invalid/header.gif?v=2"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "image/gif",
+            "memento-datetime": "Mon, 15 Mar 1999 12:00:09 GMT"
+          },
+          "bodyBytes": [
+            71,
+            73,
+            70,
+            56,
+            57,
+            97,
+            1,
+            0,
+            1,
+            0,
+            128,
+            0,
+            0,
+            255,
+            255,
+            255,
+            0,
+            0,
+            0,
+            33,
+            249,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            44,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            2,
+            2,
+            68,
+            1,
+            0,
+            59
+          ]
+        }
+      ]
+    }
+  ]
+}

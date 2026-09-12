@@ -49,9 +49,11 @@
     "commands": [
       "python3 -m json.tool agentic/contract.json",
       "python3 -m json.tool benchmarks/pilots.json",
-      "pnpm test"
+      "pnpm test",
+      "pnpm run typecheck",
+      "pnpm run acquire:fixture"
     ],
-    "note": "A pull request that introduces or changes an executable command must add it here in the same pull request, so this list never describes verification the repository cannot perform. The package skeleton and its test command landed with the decode step (#4); the M1 acquisition package extends them rather than creating a second package."
+    "note": "A pull request that introduces or changes an executable command must add it here in the same pull request, so this list never describes verification the repository cannot perform. The package skeleton and its test command landed with the decode step (#4); the M1 acquisition package extends them rather than creating a second package. Every command listed here runs against local fixtures and opens no socket: acquire:fixture replays fixtures/demo-site/manifest.json. A live provider call needs the CLI's explicit --transport live --confirm-live-acquisition and is never part of this list."
   },
   "issue_quality": {
     "required_sections": [

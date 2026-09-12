@@ -90,7 +90,8 @@ degraded. `tests/encoding.test.ts` pins both sides of that boundary, so
 changing the constant in either direction fails the suite.
 
 `degraded` is the signal a gap report consumes. This module computes and
-exposes it; writing the gap report belongs to the acquisition package (#3).
+exposes it; the acquisition package writes it into the gap report as a
+`degraded-encoding` entry (see [bounded acquisition](ACQUISITION.md)).
 
 ## Binary bodies
 
@@ -115,4 +116,5 @@ milestones can add retrieval context without changing the signature.
 
 Transliteration, ASCII folding, language detection and historical markup
 normalization. Per-item gap reporting and the evidence report itself belong to
-the M1 acquisition package.
+the acquisition package, which now records these fields per fetched body; see
+[bounded acquisition](ACQUISITION.md).
