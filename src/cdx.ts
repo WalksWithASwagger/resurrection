@@ -6,10 +6,13 @@
  * domain inventory and a report that does not say which was issued cannot be
  * read (docs/SPEC.md section 5.1).
  *
- * Scope here is deliberately narrow: build the query, parse the response,
- * carry the continuation key. Pinning the canonical query shape, the replay
- * modifier policy and capture selection is issue #7, which hardens this
- * adapter rather than forking a second one.
+ * The query shape is pinned: `output=json`, an explicit `fl=` field list,
+ * `collapse=digest`, a declared limit and `showResumeKey` continuation. The
+ * status filter is deliberately NOT sent upstream. `filter=statuscode:200`
+ * would make the provider drop redirect and error rows, and those rows are the
+ * evidence of when a page moved or died. The same expression is applied here
+ * instead, so a non-200 row is excluded from acquisition candidates while
+ * staying in the record (issue #7).
  */
 
 export const DEFAULT_CDX_ENDPOINT = 'https://web.archive.org/cdx/search/cdx';
@@ -125,4 +128,92 @@ export function parseCdxJson(text: string, limit: number): CdxPage {
   });
 
   return { rows, resumeKey, limitReached: rows.length >= limit };
+}
+
+/* -------------------------------------------------------------------------- */
+/* candidate filtering                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The acquisition-candidate rule, in CDX filter syntax.
+ *
+ * A capture the origin answered with a redirect or an error is not a page to
+ * rebuild from. It is still evidence, so the rule excludes rather than deletes:
+ * `partitionRows` returns both halves and the caller records both.
+ *
+ * The rule ranks captures within a URL; it does not decide which URLs exist.
+ * A URL whose only captures are excluded is still acquired, from an excluded
+ * capture, and said so in the report. Dropping it would delete the origin's
+ * own error page, which is the single thing that establishes a site's error
+ * template for soft-404 detection (src/classify.ts, issue #5).
+ */
+export const DEFAULT_CANDIDATE_FILTERS: readonly string[] = ['statuscode:200'];
+
+export interface CdxFilter {
+  field: string;
+  /** Anchored regular expression source, as CDX filter expressions use. */
+  pattern: string;
+  negated: boolean;
+  /** The expression verbatim, so the report names the rule that fired. */
+  source: string;
+}
+
+const FILTER_FIELDS: Readonly<Record<string, keyof CdxRow>> = {
+  urlkey: 'urlkey',
+  timestamp: 'timestamp',
+  original: 'original',
+  mimetype: 'mimetype',
+  statuscode: 'statusCode',
+  digest: 'digest',
+  length: 'length',
+};
+
+/** `[!]field:regex`, the CDX server's own filter form. */
+export function parseCdxFilter(expression: string): CdxFilter {
+  const negated = expression.startsWith('!');
+  const body = negated ? expression.slice(1) : expression;
+  const separator = body.indexOf(':');
+  if (separator <= 0) throw new Error(`CDX filter ${expression} is not field:pattern`);
+  const field = body.slice(0, separator).toLowerCase();
+  if (!(field in FILTER_FIELDS)) throw new Error(`CDX filter ${expression} names an unselected field`);
+  return { field, pattern: body.slice(separator + 1), negated, source: expression };
+}
+
+export function rowMatchesFilter(row: CdxRow, filter: CdxFilter): boolean {
+  const key = FILTER_FIELDS[filter.field];
+  if (key === undefined) return true;
+  const matched = new RegExp(`^(?:${filter.pattern})$`, 'u').test(row[key]);
+  return filter.negated ? !matched : matched;
+}
+
+/** The filter expression a row failed, or null when it passed them all. */
+export function rowExclusion(row: CdxRow, filters: readonly CdxFilter[]): string | null {
+  return filters.find((filter) => !rowMatchesFilter(row, filter))?.source ?? null;
+}
+
+export interface ExcludedRow {
+  row: CdxRow;
+  /** The filter expression this row failed, verbatim. */
+  excludedBy: string;
+}
+
+export interface RowPartition {
+  /** Rows eligible to be fetched. */
+  candidates: CdxRow[];
+  /** Rows retained as timeline evidence and never fetched. */
+  excluded: ExcludedRow[];
+}
+
+export function partitionRows(rows: readonly CdxRow[], expressions: readonly string[]): RowPartition {
+  const filters = expressions.map(parseCdxFilter);
+  const candidates: CdxRow[] = [];
+  const excluded: ExcludedRow[] = [];
+
+  for (const row of rows) {
+    const excludedBy = rowExclusion(row, filters);
+    if (excludedBy === null) candidates.push(row);
+    else excluded.push({ row, excludedBy });
+  }
+
+  return { candidates, excluded };
 }

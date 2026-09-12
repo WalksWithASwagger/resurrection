@@ -42,9 +42,138 @@ are never merged into one success number.
 | `budgets` | Requests, index requests, bytes, time, redirects, attempts, pages, dependencies. |
 | `provider` | Endpoints, the host allowlist, the rate limit and the request timeout. |
 | `discovery` | Which link relations are followed. |
+| `selection` | Which capture is chosen when the inventory offers several. |
+| `candidateFilters` | CDX filter expressions a capture must satisfy to be acquirable. |
 
 There are no site-specific branches anywhere in the engine; a second pilot is a
 second configuration file (roadmap readiness condition R5).
+
+## The CDX query shape
+
+The query is declared explicitly and recorded verbatim, because an exact-URL
+query is not a domain inventory and a report that does not say which was issued
+cannot be audited for coverage. Every run issues:
+
+| Parameter | Why it is pinned |
+| --- | --- |
+| `output=json` | The row shape is parsed, not scraped. |
+| `fl=urlkey,timestamp,original,mimetype,statuscode,digest,length` | Bounds the response instead of taking the provider's default columns, and names exactly the fields selection and the timeline read. |
+| `collapse=digest` | Suppresses consecutive captures with identical content. A weekly-crawled page otherwise returns hundreds of redundant rows and the budget goes on inventory. It collapses *adjacent* duplicates only, so it is not proof of unique-content coverage. |
+| `matchType` | The declared scope. An exact-URL query is not a host or domain inventory. |
+| `from` / `to` | The declared period. |
+| `limit` | Derived from the page budget, so one query cannot outrun the run. |
+| `showResumeKey=true` | Continuation, so a host with many captures is paged rather than truncated. |
+
+Every issued query string appears in `evidence.json` under `inventory.queries`,
+and the raw index response is retained in the object store by hash.
+
+### Why `filter=statuscode:200` is not sent upstream
+
+`filter=statuscode:200` would make the provider drop redirect and error rows.
+Those rows are exactly the evidence of *when a page moved or died*, so sending
+the filter would delete the site's timeline to save a few rows of bandwidth.
+
+The same expression is instead declared as `candidateFilters` and applied to
+the rows after they arrive. A capture that fails it is:
+
+- **excluded** from acquisition candidates, so it is never fetched while the
+  URL has a capture that passed, and
+- **retained** in `evidence.json` under `inventory.timeline`, with its
+  timestamp, status, mimetype, digest and length, and the filter expression it
+  failed.
+
+Both facts are visible in the report: `inventory.candidateFilters` names the
+rule, each inventory run carries `candidateRowCount` and `timelineRowCount`,
+and `counts.timelineRows` totals what was held back.
+
+The rule ranks captures *within* a URL. It does not decide which URLs exist. A
+URL whose every capture failed the filter is still acquired, from an excluded
+capture, and the report says so through `selection.fromExcludedCapture` and an
+`excluded-capture-only` gap. Dropping it would delete the origin's own error
+page, and that page is the single thing that establishes a site error template
+for soft-404 detection (see [outcomes](OUTCOMES.md)).
+
+## Replay modifiers
+
+| Modifier | Used for |
+| --- | --- |
+| `id_` | Pages, assets and documents. Returns the captured bytes with no replay banner and no rewritten links. |
+| `if_` | Frames and iframes. The provider's variant for framed replay. |
+
+The choice is made per fetch from the relation the link was discovered through,
+and the modifier that was actually used is recorded on the item and in the
+report. Getting this wrong means every acquired page carries injected archive
+markup that then has to be stripped heuristically.
+
+### The defensive strip, and why it should do nothing
+
+A short, literal rule list removes archive-injected nodes from decoded markup:
+the toolbar comment pair and its element, `/_static/` scripts and stylesheets,
+the analytics and `__wm.` init scripts, and the trailing `FILE ARCHIVED ON`
+comment. Every rule matches the provider's own nodes, never page prose, so a
+captured page that merely *writes about* the Wayback Machine is left alone.
+
+On a correct `id_` fetch it removes nothing, and that is the point. The
+fixtures assert the pair: stripping a rewritten body recovers the identity
+bytes exactly, and stripping identity bytes is a byte-for-byte no-op. The
+stripper is insurance; the tests are what keep it from quietly becoming
+load-bearing.
+
+The stored bytes are never rewritten. An injected body is still evidence of
+what the provider served, so the store keeps exactly what arrived and the
+report records what the strip *would* remove: how many nodes, which rules, how
+many characters, and any marker still present afterwards. A body that needed
+stripping raises an `archive-injection` gap, because injected markup in
+acquired bytes means the modifier did not reach the provider.
+
+## Capture selection policy
+
+The inventory offers several captures per URL and the fetch loop can ask for
+one. Which one is a declared policy, recorded per item with its reason, not an
+accident of row order.
+
+| Policy | Chooses |
+| --- | --- |
+| `nearest` (default) | The capture closest to the declared period's end bound, or its start bound when no end is declared, or the latest capture when the project declares no period at all. |
+| `earliest-largest` | The largest body among the captures clustered within `selection.clusterWindowDays` (default 90) of the earliest one. |
+
+**The default is `nearest`, and the reason is that it is the only policy that
+cannot silently contradict the period the operator declared.** A project that
+declares `from`/`to` is saying which era it wants; `nearest` aims at that bound
+and never drifts outside it. `earliest-largest` ranks by body length, and
+treating length as a completeness signal is a fidelity judgement — that
+judgement belongs to the fidelity score (issue #8), not to a default that
+applies to every project silently.
+
+**Switch to `earliest-largest` for a site that is fully dead.** Early captures
+of a site that later died are the least link-rotted: the assets still resolved,
+the outbound links still worked, and the page had not yet been replaced by a
+placeholder or a parking page. Within one such cluster the largest body is the
+most complete rendering rather than a stub. Both halves of the rule matter:
+earliest alone can land on a one-line placeholder, largest alone can land years
+late.
+
+Selection runs over the candidates the inventory already returned, so changing
+the policy and reselecting costs **zero index requests** — the same property
+that makes reclassification cheap. Every capture the inventory offered stays on
+the item, with the filter verdict for each, and an item that already holds
+validated bytes is never re-pointed.
+
+## Pagination honesty
+
+A truncated inventory is never reported as complete. `inventory.partial` is
+true, `inventory.partialReasons` says why in words, and a `partial-inventory`
+gap names it, whenever:
+
+- no inventory run was recorded at all,
+- the last run stopped holding an unused continuation key,
+- any run failed, or
+- any run filled its declared row limit.
+
+The last one is the subtle case: a run can end with no continuation key and
+still have filled its limit, and nothing then proves the limit was not the cut.
+Reporting that as a complete inventory would turn "we never asked" into "there
+was nothing there".
 
 ## Budgets, including retries
 
@@ -113,10 +242,15 @@ every validated body that is not content.
 
 Per fetched item the report records the requested capture time, the capture
 time the provider actually served, the distance between them, the redirect
-chain, the replay modifier, the attempt count, the local SHA-256 and the
-encoding decision from [`decode.ts`](DECODING.md): declared encoding and its
-source, chosen encoding and its source, detection confidence, and whether a
-cp1252 upgrade or a declaration override was applied.
+chain, the replay modifier that was used, the selection policy that chose the
+capture and its reason, the attempt count, the local SHA-256, the
+archive-injection scan, and the encoding decision from
+[`decode.ts`](DECODING.md): declared encoding and its source, chosen encoding
+and its source, detection confidence, and whether a cp1252 upgrade or a
+declaration override was applied.
+
+`inventory` carries the query strings issued, the candidate filters applied,
+the timeline of captures held back, and whether the inventory is partial.
 
 The report is portable: relative store paths, no operator filesystem layout, no
 credentials and no private collection URLs.
@@ -126,8 +260,11 @@ credentials and no private collection URLs.
 The gap report names, with a remedy for each: failed fetches, unattempted
 items, URLs with no known capture, validated bodies that carry no content
 (`non-content-body`), bodies whose replacement-character ratio exceeded the
-documented threshold (`degraded`), truncated bodies, and captures served far
-outside the requested era.
+documented threshold (`degraded`), truncated bodies, captures served far
+outside the requested era, bodies that carried archive-injected markup
+(`archive-injection`), URLs whose only captures failed the candidate filter
+(`excluded-capture-only`), and an inventory that cannot be shown to be complete
+(`partial-inventory`).
 
 ## Typed failure states
 
@@ -220,9 +357,6 @@ which stays a partial result rather than being replaced with synthetic success
 
 ## Deliberately not here
 
-- Capture selection policy and CDX query hardening (issue #7). The adapter
-  issues one declared query shape and keeps every alternative timestamp it saw;
-  it does not yet choose between them by policy.
 - Per-asset nearest-capture resolution (issue #6). A dependency is currently
   requested at its referring page's capture time, and the redirect chain plus
   the served timestamp record what the provider actually returned.

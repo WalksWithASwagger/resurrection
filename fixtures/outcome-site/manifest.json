@@ -140,7 +140,7 @@
     {
       "id": "frame-never-captured-nav",
       "urlIncludes": [
-        "19990601120000id_/http://outcomes.invalid/frames/nav.html"
+        "19990601120000if_/http://outcomes.invalid/frames/nav.html"
       ],
       "respond": [
         {
@@ -156,7 +156,7 @@
     {
       "id": "frame-never-captured-body",
       "urlIncludes": [
-        "19990601120000id_/http://outcomes.invalid/frames/body.html"
+        "19990601120000if_/http://outcomes.invalid/frames/body.html"
       ],
       "respond": [
         {

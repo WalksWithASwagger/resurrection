@@ -17,4 +17,6 @@ The [AI Wayback guide](https://aiwayback.com/guide/) proposes finding captures, 
 
 The decisive addition is an independent evaluation loop. Retrieval and plausible code generation do not establish visual or behavioral equivalence. Freeze reference states and run screenshot, navigation, content and file checks before declaring a reconstruction faithful. [Playwright visual comparison guidance](https://playwright.dev/docs/test-snapshots)
 
+The replay-modifier and CDX-scope points above are now pinned behaviour rather than open questions: the query shape, the `id_`/`if_` choice, the defensive strip and the capture selection policy are specified in [bounded acquisition](ACQUISITION.md) and held in place by fixtures (issue #7).
+
 Adopt the useful acquisition leads, verify provider behavior, and build the generation process around evidence and tests. Hosting, SEO, rights assurances and speed claims from the guide are not product guarantees. Current provider capacity and a live end-to-end run remain untested.

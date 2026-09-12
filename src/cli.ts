@@ -16,6 +16,7 @@ import { buildEvidenceReport, summarize, writeEvidenceReport } from './evidence.
 import { createFixtureTransport, loadFixtureManifest } from './fixture-transport.ts';
 import { loadJob, type JobState } from './job.ts';
 import { reclassifyJob } from './reclassify.ts';
+import { DEFAULT_SELECTION } from './select.ts';
 import { systemResolver } from './destination.ts';
 import { createLiveTransport } from './transport.ts';
 
@@ -161,7 +162,10 @@ async function reclassifyCommand(flags: Record<string, string>): Promise<number>
 
 /**
  * Render from job state alone. The provider fields are empty because no
- * request is made here and a report never carries operator configuration.
+ * request is made here and a report never carries operator configuration. The
+ * selection policy and the candidate filters are likewise left at their
+ * defaults: the report reads what was actually applied off the job's own
+ * inventory runs and capture records, not off a config supplied here.
  */
 async function renderReport(state: JobState, directory: string): Promise<void> {
   const report = buildEvidenceReport(state, {
@@ -176,6 +180,8 @@ async function renderReport(state: JobState, directory: string): Promise<void> {
       requestTimeoutMs: 0,
     },
     discovery: { followRelations: [], followPageLinks: false },
+    selection: DEFAULT_SELECTION,
+    candidateFilters: [],
     outputDirectory: directory,
   });
   await writeEvidenceReport(directory, report);

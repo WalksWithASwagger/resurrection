@@ -11,14 +11,35 @@ export type {
   EncodingSource,
 } from './decode.ts';
 
-export { runAcquisition } from './acquire.ts';
+export { applyCaptureSelection, runAcquisition } from './acquire.ts';
 export type { AcquisitionOptions, AcquisitionResult, ControlSignal } from './acquire.ts';
 
 export { BudgetLedger, DEFAULT_BUDGETS, EMPTY_SPEND } from './budget.ts';
 export type { BudgetCheck, BudgetLimit, BudgetSpend, Budgets } from './budget.ts';
 
-export { buildCdxUrl, parseCdxJson, CDX_FIELDS, DEFAULT_CDX_ENDPOINT } from './cdx.ts';
-export type { CdxPage, CdxQuery, CdxRow, MatchType } from './cdx.ts';
+export {
+  buildCdxUrl,
+  parseCdxFilter,
+  parseCdxJson,
+  partitionRows,
+  rowMatchesFilter,
+  CDX_FIELDS,
+  DEFAULT_CANDIDATE_FILTERS,
+  DEFAULT_CDX_ENDPOINT,
+} from './cdx.ts';
+export type { CdxFilter, CdxPage, CdxQuery, CdxRow, ExcludedRow, RowPartition } from './cdx.ts';
+export type { MatchType } from './cdx.ts';
+
+export { selectCapture, selectionTarget, CAPTURE_SELECTION_POLICIES, DEFAULT_SELECTION } from './select.ts';
+export type {
+  CaptureCandidate,
+  CaptureSelection,
+  CaptureSelectionPolicy,
+  SelectionConfig,
+} from './select.ts';
+
+export { hasArchiveInjection, stripArchiveInjection, ARCHIVE_INJECTION_MARKERS } from './toolbar.ts';
+export type { InjectionRemoval, StripResult } from './toolbar.ts';
 
 export { createTestClock, systemClock } from './clock.ts';
 export type { Clock } from './clock.ts';
@@ -65,18 +86,21 @@ export {
   isComplete,
   itemId,
   loadJob,
+  readJobProjectId,
   referenceEligible,
   saveJob,
   JOB_FILE,
   JOB_STATE_VERSION,
 } from './job.ts';
 export type {
+  ArchiveInjectionRecord,
   CaptureRecord,
   EncodingRecord,
   FetchRecord,
   InventoryRun,
   JobState,
   RedirectHop,
+  TimelineEntry,
   WorkItem,
 } from './job.ts';
 
@@ -135,7 +159,11 @@ export {
   captureDistanceSeconds,
   parseReplayUrl,
   servedTimestamp,
+  expandTimestamp,
+  replayModifierFor,
   timestampToIso,
   DEFAULT_REPLAY_ENDPOINT,
   IDENTITY_MODIFIER,
+  IFRAME_MODIFIER,
+  REPLAY_MODIFIERS,
 } from './wayback.ts';

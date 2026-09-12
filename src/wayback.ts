@@ -11,13 +11,68 @@ export const DEFAULT_REPLAY_ENDPOINT = 'https://web.archive.org/web';
 
 /**
  * `id_` asks for the captured bytes without the replay banner or rewritten
- * links. Recorded per fetch; issue #7 pins the policy and proves the absence
- * of injected markup byte for byte.
+ * links. It is what every page, asset and document fetch uses, and
+ * src/toolbar.ts proves byte for byte that the bytes carry no injected markup.
  */
 export const IDENTITY_MODIFIER = 'id_';
 
-export function buildReplayUrl(endpoint: string, timestamp: string, originalUrl: string): string {
-  return `${endpoint.replace(/\/+$/, '')}/${timestamp}${IDENTITY_MODIFIER}/${originalUrl}`;
+/**
+ * `if_` is the iframe variant: the provider serves the capture for embedding
+ * without the replay banner. A frame is fetched with it rather than with `id_`
+ * because that is the form the provider documents for framed replay, and it is
+ * also the form most likely to carry rewriting, which is why the defensive
+ * strip in src/toolbar.ts runs over every body and not only over frames.
+ */
+export const IFRAME_MODIFIER = 'if_';
+
+export const REPLAY_MODIFIERS: readonly string[] = [IDENTITY_MODIFIER, IFRAME_MODIFIER];
+
+/**
+ * The modifier is a per-fetch decision, taken from the relation the link was
+ * discovered through, and recorded on the item rather than assumed.
+ */
+export function replayModifierFor(relation: string): string {
+  return relation === 'frame' ? IFRAME_MODIFIER : IDENTITY_MODIFIER;
+}
+
+export function buildReplayUrl(
+  endpoint: string,
+  timestamp: string,
+  originalUrl: string,
+  modifier: string = IDENTITY_MODIFIER,
+): string {
+  return `${endpoint.replace(/\/+$/, '')}/${timestamp}${modifier}/${originalUrl}`;
+}
+
+/**
+ * A CDX timestamp may be a prefix. Expanding it to the first or last instant
+ * it covers is what lets a declared period such as `1999` be compared against
+ * a full capture time without pretending the prefix was a precise moment.
+ */
+export function expandTimestamp(value: string, edge: 'start' | 'end'): string {
+  if (!/^\d{4,14}$/.test(value)) return value;
+  if (value.length === 14) return value;
+
+  const year = Number(value.slice(0, 4));
+  const month = value.length >= 6 ? Number(value.slice(4, 6)) : edge === 'start' ? 1 : 12;
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const day = value.length >= 8 ? Number(value.slice(6, 8)) : edge === 'start' ? 1 : lastDay;
+  const hour = value.length >= 10 ? Number(value.slice(8, 10)) : edge === 'start' ? 0 : 23;
+  const minute = value.length >= 12 ? Number(value.slice(10, 12)) : edge === 'start' ? 0 : 59;
+  const second = edge === 'start' ? 0 : 59;
+
+  return (
+    String(year).padStart(4, '0') +
+    pad(month) +
+    pad(day) +
+    pad(hour) +
+    pad(minute) +
+    pad(second)
+  );
+}
+
+function pad(value: number): string {
+  return String(value).padStart(2, '0');
 }
 
 export interface ReplayParts {
