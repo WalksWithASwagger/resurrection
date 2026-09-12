@@ -7,6 +7,23 @@
   },
   "rules": [
     {
+      "id": "cdx-lookup-framed-html",
+      "urlIncludes": [
+        "/cdx/search/cdx",
+        "matchType=exact",
+        "framed.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "bodyText": "[[\"urlkey\", \"timestamp\", \"original\", \"mimetype\", \"statuscode\", \"digest\", \"length\"], [\"invalid,replay)/framed.html\", \"19990201000000\", \"http://replay.invalid/framed.html\", \"text/html\", \"200\", \"REPLAYFRAME02\", \"800\"], [\"invalid,replay)/framed.html\", \"19990901000000\", \"http://replay.invalid/framed.html\", \"text/html\", \"200\", \"REPLAYFRAME09\", \"800\"]]"
+        }
+      ]
+    },
+    {
       "id": "cdx-inventory",
       "urlIncludes": [
         "/cdx/search/cdx"

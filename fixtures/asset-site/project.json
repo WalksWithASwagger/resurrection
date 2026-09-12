@@ -1,0 +1,50 @@
+{
+  "projectId": "asset-site",
+  "scope": {
+    "url": "assets.invalid",
+    "matchType": "domain",
+    "from": "1999",
+    "to": "1999",
+    "seedUrls": [],
+    "dependencyHosts": [
+      "assets.invalid"
+    ]
+  },
+  "budgets": {
+    "maxRequests": 40,
+    "maxIndexRequests": 6,
+    "maxTotalBytes": 1048576,
+    "maxResponseBytes": 262144,
+    "maxElapsedMs": 60000,
+    "maxRedirects": 3,
+    "maxAttemptsPerItem": 2,
+    "maxPages": 10,
+    "maxDependencies": 20
+  },
+  "provider": {
+    "cdxEndpoint": "https://web.archive.org/cdx/search/cdx",
+    "replayEndpoint": "https://web.archive.org/web",
+    "allowedHosts": [
+      "web.archive.org"
+    ],
+    "minRequestIntervalMs": 1,
+    "requestTimeoutMs": 30000
+  },
+  "discovery": {
+    "followRelations": [
+      "stylesheet",
+      "script",
+      "image",
+      "media",
+      "frame",
+      "object",
+      "document"
+    ],
+    "followPageLinks": false
+  },
+  "assetResolution": {
+    "windowDays": 365
+  },
+  "outputDirectory": "tmp/asset-acquisition",
+  "description": "Fixture project for per-asset capture resolution (issue #6). The declared period is 1999, so the site inventory is bounded by it: an asset whose only capture is from 2001 is absent from that inventory and is worth one per-URL lookup, which is the case the issue exists for. minRequestIntervalMs is deliberately small because the fixture transport makes no provider requests."
+}

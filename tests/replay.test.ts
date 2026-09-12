@@ -192,6 +192,15 @@ test('switching the declared policy switches the capture, on the same inventory'
     assert.match(home?.selection?.reason ?? '', /largest of the 1 capture\(s\) within 90 days/u);
     assert.equal(rewritten?.requestedTimestamp, '19990310000000');
     assert.match(rewritten?.selection?.reason ?? '', /largest of the 3 capture\(s\) within 90 days/u);
-    assert.equal(result.report.spend.indexRequests, 1, 'selecting differently costs no extra index request');
+    assert.equal(
+      result.report.inventory.queries.length,
+      1,
+      'selecting differently costs no extra inventory request',
+    );
+    // The second index request is the frame's own capture lookup, which this
+    // fixture's inventory could not answer because it filled its row limit
+    // (issue #6). It is issued once per URL, whichever policy is declared.
+    assert.equal(result.report.assets.lookupIndexRequests, 1);
+    assert.equal(result.report.spend.indexRequests, 2);
   });
 });

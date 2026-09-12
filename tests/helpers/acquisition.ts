@@ -24,6 +24,7 @@ import {
 const FIXTURE_ROOT = fileURLToPath(new URL('../../fixtures/demo-site/', import.meta.url));
 const OUTCOME_ROOT = fileURLToPath(new URL('../../fixtures/outcome-site/', import.meta.url));
 const REPLAY_ROOT = fileURLToPath(new URL('../../fixtures/replay-site/', import.meta.url));
+const ASSET_ROOT = fileURLToPath(new URL('../../fixtures/asset-site/', import.meta.url));
 
 export const MANIFEST_PATH = join(FIXTURE_ROOT, 'manifest.json');
 export const PROJECT_PATH = join(FIXTURE_ROOT, 'project.json');
@@ -89,6 +90,19 @@ export async function replayHarness(directory: string, manifest?: FixtureManifes
   return {
     config: { ...config, outputDirectory: directory },
     handle: createFixtureTransport(manifest ?? (await loadFixtureManifest(REPLAY_MANIFEST_PATH))),
+    clock: createTestClock(FIXTURE_EPOCH),
+  };
+}
+
+/** The collection behind issue #6: assets whose captures are not their page's. */
+export const ASSET_MANIFEST_PATH = join(ASSET_ROOT, 'manifest.json');
+export const ASSET_PROJECT_PATH = join(ASSET_ROOT, 'project.json');
+
+export async function assetHarness(directory: string, manifest?: FixtureManifest): Promise<Harness> {
+  const config = await loadProjectConfig(ASSET_PROJECT_PATH);
+  return {
+    config: { ...config, outputDirectory: directory },
+    handle: createFixtureTransport(manifest ?? (await loadFixtureManifest(ASSET_MANIFEST_PATH))),
     clock: createTestClock(FIXTURE_EPOCH),
   };
 }

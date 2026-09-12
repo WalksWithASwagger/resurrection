@@ -13,6 +13,7 @@ import { readFile } from 'node:fs/promises';
 
 import { DEFAULT_BUDGETS, type Budgets } from './budget.ts';
 import { DEFAULT_CANDIDATE_FILTERS, DEFAULT_CDX_ENDPOINT, parseCdxFilter, type MatchType } from './cdx.ts';
+import { DEFAULT_ASSET_RESOLUTION, type AssetResolutionConfig } from './resolve-asset.ts';
 import { DEFAULT_REPLAY_ENDPOINT } from './wayback.ts';
 import {
   CAPTURE_SELECTION_POLICIES,
@@ -58,6 +59,8 @@ export interface ProjectConfig {
   discovery: DiscoveryConfig;
   /** Which capture is chosen when the inventory offers several. */
   selection: SelectionConfig;
+  /** How far a dependency's capture may sit from its referring page. */
+  assetResolution: AssetResolutionConfig;
   /**
    * CDX filter expressions an indexed row must satisfy to become an
    * acquisition candidate. A row that fails one is kept as timeline evidence.
@@ -171,6 +174,17 @@ export function parseProjectConfig(value: unknown, source: string): ProjectConfi
     throw new Error(`project config ${source}: selection.clusterWindowDays must be a positive number`);
   }
 
+  const assetRaw = optionalObject(raw['assetResolution']);
+  const windowDays = optionalNumber(
+    assetRaw['windowDays'],
+    DEFAULT_ASSET_RESOLUTION.windowDays,
+    'assetResolution.windowDays',
+    source,
+  );
+  if (windowDays <= 0) {
+    throw new Error(`project config ${source}: assetResolution.windowDays must be a positive number`);
+  }
+
   const candidateFilters =
     raw['candidateFilters'] === undefined
       ? [...DEFAULT_CANDIDATE_FILTERS]
@@ -184,6 +198,7 @@ export function parseProjectConfig(value: unknown, source: string): ProjectConfi
     provider,
     discovery,
     selection: { policy, clusterWindowDays },
+    assetResolution: { windowDays },
     candidateFilters,
     outputDirectory: requireString(raw['outputDirectory'], 'outputDirectory', source),
   };

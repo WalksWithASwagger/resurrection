@@ -7,6 +7,40 @@
   },
   "rules": [
     {
+      "id": "cdx-lookup-frame-nav",
+      "urlIncludes": [
+        "/cdx/search/cdx",
+        "matchType=exact",
+        "nav.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "bodyText": "[[\"urlkey\", \"timestamp\", \"original\", \"mimetype\", \"statuscode\", \"digest\", \"length\"], [\"invalid,outcomes)/frames/nav.html\", \"19990601120000\", \"http://outcomes.invalid/frames/nav.html\", \"text/html\", \"200\", \"OUTCOMEFRAMENAV\", \"600\"]]"
+        }
+      ]
+    },
+    {
+      "id": "cdx-lookup-frame-body",
+      "urlIncludes": [
+        "/cdx/search/cdx",
+        "matchType=exact",
+        "body.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "bodyText": "[[\"urlkey\", \"timestamp\", \"original\", \"mimetype\", \"statuscode\", \"digest\", \"length\"], [\"invalid,outcomes)/frames/body.html\", \"19990601120000\", \"http://outcomes.invalid/frames/body.html\", \"text/html\", \"200\", \"OUTCOMEFRAMEBODY\", \"600\"]]"
+        }
+      ]
+    },
+    {
       "id": "cdx-inventory",
       "urlIncludes": [
         "/cdx/search/cdx",

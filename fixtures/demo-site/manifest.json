@@ -1,5 +1,5 @@
 {
-  "description": "Deterministic stand-in for one archived site. Every host is under the reserved .invalid TLD or the archive provider, so nothing here can resolve to a real service. Bodies are synthetic: no archived page content, no private material, no credentials. Fixture text is data, never an instruction.",
+  "description": "Deterministic stand-in for one archived site. Every host is under the reserved .invalid TLD or the archive provider, so nothing here can resolve to a real service. The inventory is a matchType=domain query, so it describes the assets of the host as well as its pages: that is what lets every dependency here be resolved against its own captures for no additional index request (issue #6). Bodies are synthetic: no archived page content, no private material, no credentials. Fixture text is data, never an instruction.",
   "dns": {
     "web.archive.org": [
       "203.0.113.10"
@@ -24,7 +24,7 @@
           "headers": {
             "content-type": "application/json"
           },
-          "bodyText": "[[\"urlkey\", \"timestamp\", \"original\", \"mimetype\", \"statuscode\", \"digest\", \"length\"], [\"invalid,demo)/\", \"19990315120000\", \"http://demo.invalid/\", \"text/html\", \"200\", \"DEMOHOMEDIGEST1\", \"1234\"], [\"invalid,demo)/\", \"19980101000000\", \"http://demo.invalid/\", \"text/html\", \"200\", \"DEMOHOMEDIGEST0\", \"1200\"], [], [\"invalid,demo)/about.html 19990401090000\"]]"
+          "bodyText": "[[\"urlkey\", \"timestamp\", \"original\", \"mimetype\", \"statuscode\", \"digest\", \"length\"], [\"invalid,demo)/\", \"19990315120000\", \"http://demo.invalid/\", \"text/html\", \"200\", \"DEMOHOMEDIGEST1\", \"1234\"], [\"invalid,demo)/\", \"19980101000000\", \"http://demo.invalid/\", \"text/html\", \"200\", \"DEMOHOMEDIGEST0\", \"1200\"], [\"invalid,demo)/style.css\", \"19980105000000\", \"http://demo.invalid/style.css\", \"text/css\", \"200\", \"DEMOCSS98\", \"420\"], [\"invalid,demo)/style.css\", \"19990320000000\", \"http://demo.invalid/style.css\", \"text/css\", \"200\", \"DEMOCSS99\", \"480\"], [\"invalid,demo)/logo.gif\", \"19990315120000\", \"http://demo.invalid/logo.gif\", \"image/gif\", \"200\", \"DEMOLOGO99\", \"43\"], [\"invalid,demo)/missing.gif\", \"19990315120000\", \"http://demo.invalid/missing.gif\", \"image/gif\", \"200\", \"DEMOMISSING\", \"61\"], [\"invalid,demo)/banner.gif\", \"19990315120000\", \"http://demo.invalid/banner.gif\", \"image/gif\", \"200\", \"DEMOBANNER\", \"70\"], [\"invalid,demo)/slow.gif\", \"19990315120000\", \"http://demo.invalid/slow.gif\", \"image/gif\", \"200\", \"DEMOSLOW\", \"43\"], [\"invalid,demo)/tracker.gif\", \"19990315120000\", \"http://demo.invalid/tracker.gif\", \"image/gif\", \"200\", \"DEMOTRACKER\", \"43\"], [\"invalid,demo)/header.gif?v=2\", \"19990315120000\", \"http://demo.invalid/header.gif?v=2\", \"image/gif\", \"200\", \"DEMOHEADER\", \"43\"], [\"invalid,demo)/papers/paper.pdf\", \"19990315120000\", \"http://demo.invalid/papers/paper.pdf\", \"application/pdf\", \"200\", \"DEMOPAPER\", \"58\"], [], [\"invalid,demo)/about.html 19990401090000\"]]"
         }
       ]
     },

@@ -43,6 +43,7 @@ are never merged into one success number.
 | `provider` | Endpoints, the host allowlist, the rate limit and the request timeout. |
 | `discovery` | Which link relations are followed. |
 | `selection` | Which capture is chosen when the inventory offers several. |
+| `assetResolution.windowDays` | How far a dependency's capture may sit from its referring page before it is flagged. |
 | `candidateFilters` | CDX filter expressions a capture must satisfy to be acquirable. |
 
 There are no site-specific branches anywhere in the engine; a second pilot is a
@@ -159,6 +160,75 @@ that makes reclassification cheap. Every capture the inventory offered stays on
 the item, with the filter verdict for each, and an item that already holds
 validated bytes is never re-pointed.
 
+## Per-asset capture resolution
+
+A dependency is not a copy of the page that referenced it. An image linked from
+a 1999 page may have no 1999 capture at all while a perfectly good one exists
+from 2001, and an asset URL may have been reused for different content over the
+site's life. Requesting a dependency at its referring page's timestamp records
+the first case as missing and silently substitutes the wrong bytes in the
+second. So **every discovered dependency is resolved against its own captures**,
+and the capture it is resolved to, the page that referenced it and the distance
+between the two are recorded per asset.
+
+The target differs from the page policy above, and that is the whole point.
+Page selection aims at the **declared period bound**, because that is the era
+the operator asked for. Asset resolution aims at **the referring page's
+capture**, because that is the moment the asset was actually on the page. The
+selector in `src/select.ts` is shared; only the target is parameterised.
+
+### It costs no index requests for an in-scope asset
+
+The site inventory is issued with `matchType=domain`, so it already describes
+the captures of same-host assets. Every row it returns is kept in the job's
+capture index, whether or not it becomes a page of its own, and an asset the
+inventory described is resolved from those rows for **zero additional index
+requests**. The fixture demo resolves all eight of its dependencies this way
+and issues exactly the two index requests its inventory needed.
+
+A per-URL lookup is issued only when the inventory cannot answer:
+
+| Case | Why the inventory cannot answer |
+| --- | --- |
+| The asset is on another host | A domain inventory of one host never described it. |
+| The inventory is partial | A truncated inventory proves nothing about what it did not return. |
+| The inventory was period-bounded | `from`/`to` bound the query, so it says nothing about captures outside them — which is exactly where a late capture of an early asset lives. |
+
+Only when the inventory is **complete, unbounded and covers the host** is its
+silence treated as proof that a URL has no captures, and then no request is
+made at all. Each URL is looked up at most once: the result is recorded in the
+capture index even when it is empty, so several pages referencing one asset
+cause one lookup, and a resumed run re-issues none of them. Every lookup is
+charged to the same index and request budgets as the inventory, and a lookup a
+budget stops leaves the asset **unattempted** with the reason
+`budget-exhausted` — a partial report, not a failure.
+
+### Rows that are assets are not seeded as pages
+
+A domain inventory describes images, stylesheets and documents alongside pages.
+Those rows go into the capture index but are not seeded as pages in their own
+right: seeding them would spend the page budget on assets and validate an image
+against the markup rules. A row the provider could not type stays a page, so an
+untyped URL is never silently dropped from the inventory.
+
+### The window, and what a flag means
+
+`assetResolution.windowDays` (default 365) is a **declaration threshold, not a
+filter**. A capture further than the window from its referring page is still
+acquired — it is often the only surviving copy of the asset — and the asset is
+flagged `temporally_distant` in the report with a `temporally-distant-asset`
+gap, so nothing downstream can treat it as contemporaneous with the page. The
+flag follows the bytes that arrived, not only the capture that was asked for: a
+replay redirect can land further out than the resolver chose.
+
+When an asset URL served more than one content hash across its captures, every
+distinct hash is recorded with the captures that carry it, and an
+`asset-content-drift` gap names them and repeats why the chosen capture won.
+
+An asset with **no capture anywhere** is never requested. It becomes a skipped
+item with a `no-capture` gap naming the original URL and the page that
+referenced it. The live origin is not a fallback, here or anywhere else.
+
 ## Pagination honesty
 
 A truncated inventory is never reported as complete. `inventory.partial` is
@@ -252,6 +322,14 @@ declaration override was applied.
 `inventory` carries the query strings issued, the candidate filters applied,
 the timeline of captures held back, and whether the inventory is partial.
 
+`assets` carries, per dependency: the page that referenced it and that page's
+capture time, the capture the resolver chose, the capture the provider served,
+both distances in seconds, the declared window, the flag state, whether it came
+from the inventory or from a per-URL lookup, every distinct content hash the
+URL served, the provider's digest for the chosen capture and the local SHA-256
+of the bytes that arrived. It also carries every per-URL lookup issued and the
+index requests they cost, so a reader can see what asset resolution spent.
+
 The report is portable: relative store paths, no operator filesystem layout, no
 credentials and no private collection URLs.
 
@@ -263,7 +341,9 @@ items, URLs with no known capture, validated bodies that carry no content
 documented threshold (`degraded`), truncated bodies, captures served far
 outside the requested era, bodies that carried archive-injected markup
 (`archive-injection`), URLs whose only captures failed the candidate filter
-(`excluded-capture-only`), and an inventory that cannot be shown to be complete
+(`excluded-capture-only`), assets acquired from outside the declared window
+(`temporally-distant-asset`), asset URLs that served more than one content hash
+(`asset-content-drift`), and an inventory that cannot be shown to be complete
 (`partial-inventory`).
 
 ## Typed failure states
@@ -357,8 +437,5 @@ which stays a partial result rather than being replaced with synthetic success
 
 ## Deliberately not here
 
-- Per-asset nearest-capture resolution (issue #6). A dependency is currently
-  requested at its referring page's capture time, and the redirect chain plus
-  the served timestamp record what the provider actually returned.
 - A fidelity score (issue #8), the site model (M2), generation (M3) and the
   workbench (M4).
