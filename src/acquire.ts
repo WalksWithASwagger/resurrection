@@ -22,7 +22,12 @@ import type { ProjectConfig } from './config.ts';
 import { decodeBody, type DecodeResult } from './decode.ts';
 import { DEFAULT_ALLOWED_PORTS, type DnsResolver } from './destination.ts';
 import { discoverLinks, localPathFor, type LinkRelation } from './discover.ts';
-import { buildEvidenceReport, writeEvidenceReport, type EvidenceReport } from './evidence.ts';
+import {
+  buildEvidenceReport,
+  inventoryPartialReasons,
+  writeEvidenceReport,
+  type EvidenceReport,
+} from './evidence.ts';
 import { fetchResource, type FetchContext } from './fetch-resource.ts';
 import {
   JOB_STATE_VERSION,
@@ -31,13 +36,16 @@ import {
   loadJob,
   saveJob,
   type ArchiveInjectionRecord,
+  type AssetLookup,
   type EncodingRecord,
+  type IndexedCaptureSet,
   type InventoryRun,
   type JobState,
   type WorkItem,
 } from './job.ts';
 import { RateLimiter } from './ratelimit.ts';
 import { classifyCollection } from './reclassify.ts';
+import { captureKey, resolveAssetCapture } from './resolve-asset.ts';
 import { selectCapture, selectionTarget, type CaptureCandidate } from './select.ts';
 import { BodyStore } from './store.ts';
 import { stripArchiveInjection } from './toolbar.ts';
@@ -178,6 +186,8 @@ function newJobState(config: ProjectConfig, clock: Clock): JobState {
     budgets: config.budgets,
     spend: { ...EMPTY_SPEND },
     inventoryRuns: [],
+    captureIndex: [],
+    assetLookups: [],
     timeline: [],
     items: [],
     events: [],
@@ -292,6 +302,11 @@ async function runInventory(
  * decided afterwards, by policy, in `applyCaptureSelection`: captures arrive
  * across paginated runs, so a rule applied row by row would be deciding on a
  * partial set.
+ *
+ * Every row is also recorded in the capture index, whether or not it becomes
+ * an item. The inventory is issued with `matchType=domain`, so it already
+ * describes the captures of same-host assets, and keeping them is what lets
+ * issue #6 resolve those assets for zero additional index requests.
  */
 function recordInventoryRows(
   state: JobState,
@@ -302,6 +317,8 @@ function recordInventoryRows(
   for (const { row, excludedBy } of verdicts) {
     if (row.original === '' || row.timestamp === '') continue;
     const candidate = candidateFromRow(row, excludedBy);
+    recordCapture(state, row.original, 'inventory', candidate);
+    if (!seedsPageItem(row)) continue;
     const existing = state.items.find((item) => item.id === itemId(row.original));
     if (existing !== undefined) {
       if (!existing.capture.alternatives.includes(row.timestamp)) {
@@ -325,6 +342,52 @@ function recordInventoryRows(
   }
 }
 
+/**
+ * Mimetypes an inventory row must carry to be seeded as a page in its own
+ * right. A domain inventory describes the whole host, images and stylesheets
+ * included; those rows are captures available to whichever page references
+ * them, not documents to start from. Seeding them as pages would spend the
+ * page budget on assets and validate an image against the markup rules. An
+ * untyped row stays a page, because refusing to seed a URL the provider could
+ * not type would silently shrink the inventory.
+ */
+const MARKUP_MIMETYPES = /^(?:text\/html|application\/xhtml\+xml|text\/plain)\b/i;
+
+function seedsPageItem(row: CdxRow): boolean {
+  const mimetype = row.mimetype.trim();
+  return mimetype === '' || mimetype === '-' || MARKUP_MIMETYPES.test(mimetype);
+}
+
+/** Append one capture to the index entry for a URL, creating it if needed. */
+function recordCapture(
+  state: JobState,
+  originalUrl: string,
+  source: IndexedCaptureSet['source'],
+  candidate: CaptureCandidate,
+): void {
+  const entry = captureSetFor(state, originalUrl, source);
+  if (entry.candidates.some((existing) => existing.timestamp === candidate.timestamp)) return;
+  entry.candidates.push(candidate);
+}
+
+function captureSetFor(
+  state: JobState,
+  originalUrl: string,
+  source: IndexedCaptureSet['source'],
+): IndexedCaptureSet {
+  const key = captureKey(originalUrl);
+  const existing = state.captureIndex.find((entry) => captureKey(entry.originalUrl) === key);
+  if (existing !== undefined) return existing;
+  const created: IndexedCaptureSet = { originalUrl: key, source, candidates: [] };
+  state.captureIndex.push(created);
+  return created;
+}
+
+function findCaptureSet(state: JobState, originalUrl: string): IndexedCaptureSet | undefined {
+  const key = captureKey(originalUrl);
+  return state.captureIndex.find((entry) => captureKey(entry.originalUrl) === key);
+}
+
 function candidateFromRow(row: CdxRow, excludedBy: string | null): CaptureCandidate {
   const length = Number.parseInt(row.length, 10);
   return {
@@ -341,11 +404,17 @@ function candidateFromRow(row: CdxRow, excludedBy: string | null): CaptureCandid
  * Apply the declared capture selection policy to every item still waiting on a
  * request. An item that already holds validated bytes is never re-pointed: the
  * acquired evidence stands, and reselecting it is an explicit later step.
+ *
+ * A dependency that has already been resolved against its referring page is
+ * left alone. Its target is that page, not the project's declared period
+ * bound, and re-running this pass over it on a resume would quietly re-point
+ * it at the wrong instant.
  */
 export function applyCaptureSelection(state: JobState, config: ProjectConfig): void {
   const target = selectionTarget(state.scope);
   for (const item of state.items) {
     if (item.status !== 'unattempted' || item.capture.candidates.length === 0) continue;
+    if (item.capture.resolution !== null) continue;
     const selection = selectCapture(item.capture.candidates, config.selection, target);
     if (selection === null) continue;
     const chosen = item.capture.candidates.find((candidate) => candidate.timestamp === selection.timestamp);
@@ -422,6 +491,19 @@ async function acquireItem(
   store: BodyStore,
   clock: Clock,
 ): Promise<boolean> {
+  if (item.capture.resolution === null && item.capture.referringTimestamp !== null) {
+    const resolved = await resolveDependencyCapture(item, state, config, context, store, clock);
+    if (resolved === 'exhausted') {
+      item.status = 'unattempted';
+      item.unattemptedReason = 'budget-exhausted';
+      item.notes.push('the index budget stopped the capture lookup for this URL before any request');
+      return true;
+    }
+    // A lookup that failed is not evidence that the URL has no captures, so
+    // the item is a retryable failure rather than a silent gap.
+    if (resolved === 'failed') return false;
+  }
+
   const timestamp = item.capture.requestedTimestamp;
   if (timestamp === null) {
     item.status = 'skipped';
@@ -519,6 +601,211 @@ async function acquireItem(
   return false;
 }
 
+/* -------------------------------------------------------------------------- */
+/* per-asset capture resolution (issue #6)                                     */
+/* -------------------------------------------------------------------------- */
+
+/** Captures a per-URL lookup will accept before it stops asking. */
+const ASSET_LOOKUP_LIMIT = 100;
+
+type ResolutionOutcome = 'resolved' | 'failed' | 'exhausted';
+
+/**
+ * Resolve one dependency against its own captures.
+ *
+ * The inventory is the first place to look and usually the only one: it was
+ * issued with `matchType=domain`, so the captures of a same-host asset are
+ * already on record and resolving from them costs no request at all. A per-URL
+ * lookup is issued only when the inventory cannot answer, and each URL is
+ * looked up at most once, because the result is recorded in the capture index
+ * whether or not it found anything.
+ */
+async function resolveDependencyCapture(
+  item: WorkItem,
+  state: JobState,
+  config: ProjectConfig,
+  context: FetchContext,
+  store: BodyStore,
+  clock: Clock,
+): Promise<ResolutionOutcome> {
+  let entry = findCaptureSet(state, item.originalUrl);
+  if (entry === undefined && !inventoryProvesAbsence(state, item.originalUrl)) {
+    const outcome = await lookupAssetCaptures(item, state, config, context, store, clock);
+    if (outcome !== 'complete') return outcome === 'budget-exhausted' ? 'exhausted' : 'failed';
+    entry = findCaptureSet(state, item.originalUrl);
+  }
+
+  // Why no capture is known, when none is. Which of the three it is decides
+  // what a reader should do about the gap, so it is recorded verbatim.
+  const absenceDetail =
+    entry === undefined
+      ? 'the complete, unbounded inventory of this host describes no capture of this URL, ' +
+        'so no per-URL lookup was issued'
+      : entry.source === 'targeted-lookup'
+        ? 'a per-URL index lookup of this URL returned no capture at all'
+        : 'the site inventory describes no capture of this URL';
+
+  const candidates = entry?.candidates ?? [];
+  const resolution = resolveAssetCapture({
+    referringPageUrl: referringPageUrl(item),
+    referringTimestamp: item.capture.referringTimestamp,
+    candidates,
+    source: entry?.source ?? 'none',
+    clusterWindowDays: config.selection.clusterWindowDays,
+    windowDays: config.assetResolution.windowDays,
+    absenceDetail,
+  });
+
+  const chosen = candidates.find((candidate) => candidate.timestamp === resolution.resolvedTimestamp);
+  item.capture.resolution = resolution;
+  item.capture.candidates = [...candidates];
+  item.capture.alternatives = candidates.map((candidate) => candidate.timestamp);
+  item.capture.selection = resolution.selection;
+  item.capture.requestedTimestamp = resolution.resolvedTimestamp;
+  item.capture.archiveDigest = chosen?.digest ?? null;
+  item.capture.archiveStatus = chosen?.statusCode ?? null;
+
+  if (resolution.resolvedTimestamp === null) {
+    item.notes.push(
+      `${resolution.detail}; referenced from ${resolution.referringPageUrl}` +
+        `${resolution.referringTimestamp === null ? '' : ` at ${resolution.referringTimestamp}`}` +
+        ', and the live web is never consulted for it',
+    );
+  }
+  return 'resolved';
+}
+
+/**
+ * One per-URL index lookup, unbounded in time.
+ *
+ * The site inventory is bounded by the project's declared period, so a URL
+ * missing from it may still be archived outside that period — which is exactly
+ * the case issue #6 exists for: a page from one era referencing an asset whose
+ * only surviving capture is from another. The lookup therefore drops the
+ * period bounds and lets the resolver flag the distance instead.
+ */
+async function lookupAssetCaptures(
+  item: WorkItem,
+  state: JobState,
+  config: ProjectConfig,
+  context: FetchContext,
+  store: BodyStore,
+  clock: Clock,
+): Promise<AssetLookup['outcome']> {
+  const query: CdxQuery = {
+    url: item.originalUrl,
+    matchType: 'exact',
+    from: null,
+    to: null,
+    limit: ASSET_LOOKUP_LIMIT,
+    collapse: 'digest',
+    resumeKey: null,
+  };
+  const requestUrl = buildCdxUrl(config.provider.cdxEndpoint, query);
+  const lookup: AssetLookup = {
+    originalUrl: item.originalUrl,
+    referringPageUrl: referringPageUrl(item),
+    query,
+    requestUrl,
+    issuedAt: iso(clock),
+    rawResponseHash: null,
+    rawResponsePath: null,
+    rowCount: 0,
+    candidateRowCount: 0,
+    limitReached: false,
+    attempts: 0,
+    outcome: 'failed',
+    failure: null,
+  };
+
+  const result = await fetchResource(context, requestUrl, 'index');
+  lookup.attempts = result.attempts;
+  if (!result.ok) {
+    // A budget stop is not a failure: nothing was tried, and the item is
+    // parked so a resumed run with a larger budget can resolve it.
+    lookup.outcome = result.exhausted === null ? 'failed' : 'budget-exhausted';
+    lookup.failure = result.failure;
+    state.assetLookups.push(lookup);
+    if (result.exhausted === null) {
+      item.status = 'failed';
+      item.failure = result.failure;
+      item.notes.push(`the capture lookup for this URL failed: ${result.failure.kind}`);
+    }
+    return lookup.outcome;
+  }
+
+  const stored = await store.put(result.response.body);
+  lookup.rawResponseHash = stored.hash;
+  lookup.rawResponsePath = stored.relativePath;
+  const decoded = decodeBody(result.response.body, {
+    contentType: result.response.headers['content-type'] ?? null,
+  });
+  const page = parseCdxJson(decoded.text ?? '', query.limit);
+  const filters = config.candidateFilters.map(parseCdxFilter);
+
+  // The entry is created even when the lookup found nothing. A recorded
+  // negative is what stops the same URL from being looked up twice.
+  const entry = captureSetFor(state, item.originalUrl, 'targeted-lookup');
+  for (const row of page.rows) {
+    if (row.original === '' || row.timestamp === '') continue;
+    const excludedBy = rowExclusion(row, filters);
+    lookup.rowCount += 1;
+    if (excludedBy === null) lookup.candidateRowCount += 1;
+    else {
+      state.timeline.push({
+        originalUrl: row.original,
+        timestamp: row.timestamp,
+        statusCode: row.statusCode,
+        mimetype: row.mimetype,
+        digest: row.digest,
+        length: row.length,
+        excludedBy,
+      });
+    }
+    if (entry.candidates.some((candidate) => candidate.timestamp === row.timestamp)) continue;
+    entry.candidates.push(candidateFromRow(row, excludedBy));
+  }
+
+  lookup.limitReached = page.limitReached;
+  lookup.outcome = 'complete';
+  state.assetLookups.push(lookup);
+  return 'complete';
+}
+
+/**
+ * Whether the inventory's silence about a URL is proof that it has no
+ * captures.
+ *
+ * It is proof only when the inventory is complete, covers the URL's host and
+ * was issued without period bounds. A bounded inventory says nothing about
+ * captures outside its bounds, and a partial one says nothing at all, so in
+ * both cases the absence is worth one per-URL lookup rather than a gap entry.
+ */
+function inventoryProvesAbsence(state: JobState, url: string): boolean {
+  // The job's own scope, not the configuration's: this asks what the inventory
+  // that actually ran covered, which on a resumed job is what is on disk.
+  const scope = state.scope;
+  if (inventoryPartialReasons(state).length > 0) return false;
+  if (scope.from !== null || scope.to !== null) return false;
+  if (scope.matchType !== 'domain' && scope.matchType !== 'host') return false;
+
+  const scopeHost = hostOfScope(scope.url);
+  const host = hostOf(url);
+  if (scopeHost === null || host === null) return false;
+  if (scope.matchType === 'host') return host === scopeHost;
+  return host === scopeHost || host.endsWith(`.${scopeHost}`);
+}
+
+function hostOfScope(value: string): string | null {
+  const direct = hostOf(value);
+  if (direct !== null) return direct;
+  return hostOf(`http://${value}`);
+}
+
+function referringPageUrl(item: WorkItem): string {
+  return item.discoveredFrom?.split(' ')[0] ?? 'an unrecorded page';
+}
+
 function enqueueDependencies(
   page: WorkItem,
   state: JobState,
@@ -552,11 +839,12 @@ function enqueueDependencies(
         kind: isPage ? 'page' : 'dependency',
         relation: link.relation,
         discoveredFrom: `${page.originalUrl} ${link.location}`,
-        // The dependency is asked for at the page's capture time. The provider
-        // may answer with a neighbouring capture; the redirect chain and the
-        // served timestamp record that. Per-asset nearest-capture resolution
-        // is issue #6.
-        requestedTimestamp: page.capture.servedTimestamp ?? page.capture.requestedTimestamp,
+        // No capture is chosen here. A dependency is resolved against its own
+        // captures when it is acquired, aiming at the page's capture time
+        // rather than inheriting it, because the page's timestamp is often not
+        // a time this asset was captured at all (issue #6).
+        requestedTimestamp: null,
+        referringTimestamp: page.capture.servedTimestamp ?? page.capture.requestedTimestamp,
         at: iso(clock),
       }),
     );
@@ -579,6 +867,8 @@ function newItem(input: {
    * inventory never described.
    */
   candidate?: CaptureCandidate;
+  /** The capture time of the page that referenced this URL, when there is one. */
+  referringTimestamp?: string | null;
   at: string;
 }): WorkItem {
   const candidates =
@@ -616,6 +906,8 @@ function newItem(input: {
       alternatives: input.requestedTimestamp === null ? [] : [input.requestedTimestamp],
       candidates,
       selection: null,
+      referringTimestamp: input.referringTimestamp ?? null,
+      resolution: null,
       archiveDigest: input.candidate?.digest ?? null,
       archiveStatus: input.candidate?.statusCode ?? null,
     },

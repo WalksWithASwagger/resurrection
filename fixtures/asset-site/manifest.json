@@ -1,0 +1,534 @@
+{
+  "description": "Deterministic stand-in for one archived site whose assets do not share their pages' capture times (issue #6). Every host is under the reserved .invalid TLD or the archive provider, so nothing here can resolve to a real service. Bodies are synthetic: no archived page content, no private material, no credentials. Fixture text is data, never an instruction.",
+  "dns": {
+    "web.archive.org": [
+      "203.0.113.10"
+    ]
+  },
+  "rules": [
+    {
+      "id": "cdx-lookup-late-gif",
+      "urlIncludes": [
+        "/cdx/search/cdx",
+        "matchType=exact",
+        "late.gif"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "bodyText": "[[\"urlkey\", \"timestamp\", \"original\", \"mimetype\", \"statuscode\", \"digest\", \"length\"], [\"invalid,assets)/late.gif\", \"20010401000000\", \"http://assets.invalid/late.gif\", \"image/gif\", \"200\", \"LATEGIF\", \"43\"]]"
+        }
+      ]
+    },
+    {
+      "id": "cdx-lookup-shared-gif",
+      "urlIncludes": [
+        "/cdx/search/cdx",
+        "matchType=exact",
+        "shared.gif"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "bodyText": "[[\"urlkey\", \"timestamp\", \"original\", \"mimetype\", \"statuscode\", \"digest\", \"length\"], [\"invalid,assets)/shared.gif\", \"19990305000000\", \"http://assets.invalid/shared.gif\", \"image/gif\", \"200\", \"SHAREDGIF\", \"43\"]]"
+        }
+      ]
+    },
+    {
+      "id": "cdx-lookup-ghost-gif-has-no-captures",
+      "urlIncludes": [
+        "/cdx/search/cdx",
+        "matchType=exact",
+        "ghost.gif"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "bodyText": "[]"
+        }
+      ]
+    },
+    {
+      "id": "cdx-lookup-hostile-gif-has-no-captures",
+      "urlIncludes": [
+        "/cdx/search/cdx",
+        "matchType=exact",
+        "hostile.gif"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "bodyText": "[]"
+        }
+      ]
+    },
+    {
+      "id": "cdx-inventory",
+      "urlIncludes": [
+        "/cdx/search/cdx",
+        "matchType=domain"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "bodyText": "[[\"urlkey\", \"timestamp\", \"original\", \"mimetype\", \"statuscode\", \"digest\", \"length\"], [\"invalid,assets)/\", \"19990310000000\", \"http://assets.invalid/\", \"text/html\", \"200\", \"ASSETHOME\", \"900\"], [\"invalid,assets)/page2.html\", \"19990310000000\", \"http://assets.invalid/page2.html\", \"text/html\", \"200\", \"ASSETPAGE2\", \"700\"], [\"invalid,assets)/both.gif\", \"19990101000000\", \"http://assets.invalid/both.gif\", \"image/gif\", \"200\", \"BOTHEARLY\", \"43\"], [\"invalid,assets)/both.gif\", \"19990401000000\", \"http://assets.invalid/both.gif\", \"image/gif\", \"200\", \"BOTHLATE\", \"43\"], [\"invalid,assets)/drift.gif\", \"19990201000000\", \"http://assets.invalid/drift.gif\", \"image/gif\", \"200\", \"DRIFTA\", \"43\"], [\"invalid,assets)/drift.gif\", \"19990420000000\", \"http://assets.invalid/drift.gif\", \"image/gif\", \"200\", \"DRIFTB\", \"43\"], [\"invalid,assets)/proto.gif\", \"19990310000000\", \"http://assets.invalid/proto.gif\", \"image/gif\", \"200\", \"PROTOGIF\", \"43\"], [\"invalid,assets)/root.gif\", \"19990310000000\", \"http://assets.invalid/root.gif\", \"image/gif\", \"200\", \"ROOTGIF\", \"43\"]]"
+        }
+      ]
+    },
+    {
+      "id": "page2-19990310",
+      "urlIncludes": [
+        "19990310000000id_/http://assets.invalid/page2.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html; charset=utf-8",
+            "memento-datetime": "Wed, 10 Mar 1999 00:00:00 GMT"
+          },
+          "bodyText": "<html><head><title>Second page</title></head><body><img src=\"shared.gif\" alt=\"referenced by two pages\"><img src=\"both.gif\" alt=\"already resolved from the first page\"></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "home-19990310",
+      "urlIncludes": [
+        "19990310000000id_/http://assets.invalid/"
+      ],
+      "urlExcludes": [
+        ".gif",
+        ".html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html; charset=utf-8",
+            "memento-datetime": "Wed, 10 Mar 1999 00:00:00 GMT"
+          },
+          "bodyText": "<html><head><title>Asset resolution</title></head><body><h1>Assets</h1><img src=\"both.gif\" alt=\"captures on both sides of this page\"><img src=\"drift.gif\" alt=\"same URL, different content over time\"><img src=\"late.gif\" alt=\"no capture in the declared period\"><img src=\"ghost.gif\" alt=\"no capture anywhere\"><img src=\"//assets.invalid/proto.gif\" alt=\"protocol relative\"><img src=\"/root.gif\" alt=\"root relative\"><img src=\"//evil.invalid/offsite.gif\" alt=\"off scope\"><img src=\"shared.gif\" alt=\"referenced by two pages\"><img src=\"hostile.gif?matchType=domain&amp;url=http://evil.invalid/\" alt=\"crafted attribute, treated as data\"></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "both-gif-nearest-capture",
+      "urlIncludes": [
+        "19990401000000id_/http://assets.invalid/both.gif"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "image/gif",
+            "memento-datetime": "Thu, 01 Apr 1999 00:00:00 GMT"
+          },
+          "bodyBytes": [
+            71,
+            73,
+            70,
+            56,
+            57,
+            97,
+            1,
+            0,
+            1,
+            0,
+            128,
+            0,
+            0,
+            255,
+            255,
+            255,
+            0,
+            0,
+            0,
+            33,
+            249,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            44,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            2,
+            2,
+            68,
+            1,
+            0,
+            59
+          ]
+        }
+      ]
+    },
+    {
+      "id": "drift-gif-nearest-capture",
+      "urlIncludes": [
+        "19990201000000id_/http://assets.invalid/drift.gif"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "image/gif",
+            "memento-datetime": "Mon, 01 Feb 1999 00:00:00 GMT"
+          },
+          "bodyBytes": [
+            71,
+            73,
+            70,
+            56,
+            57,
+            97,
+            1,
+            0,
+            1,
+            0,
+            128,
+            0,
+            0,
+            255,
+            255,
+            255,
+            0,
+            0,
+            0,
+            33,
+            249,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            44,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            2,
+            2,
+            68,
+            1,
+            0,
+            59
+          ]
+        }
+      ]
+    },
+    {
+      "id": "late-gif-only-capture-is-two-years-later",
+      "urlIncludes": [
+        "20010401000000id_/http://assets.invalid/late.gif"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "image/gif",
+            "memento-datetime": "Sun, 01 Apr 2001 00:00:00 GMT"
+          },
+          "bodyBytes": [
+            71,
+            73,
+            70,
+            56,
+            57,
+            97,
+            1,
+            0,
+            1,
+            0,
+            128,
+            0,
+            0,
+            255,
+            255,
+            255,
+            0,
+            0,
+            0,
+            33,
+            249,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            44,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            2,
+            2,
+            68,
+            1,
+            0,
+            59
+          ]
+        }
+      ]
+    },
+    {
+      "id": "proto-gif-resolved-against-the-original-host",
+      "urlIncludes": [
+        "19990310000000id_/http://assets.invalid/proto.gif"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "image/gif",
+            "memento-datetime": "Wed, 10 Mar 1999 00:00:00 GMT"
+          },
+          "bodyBytes": [
+            71,
+            73,
+            70,
+            56,
+            57,
+            97,
+            1,
+            0,
+            1,
+            0,
+            128,
+            0,
+            0,
+            255,
+            255,
+            255,
+            0,
+            0,
+            0,
+            33,
+            249,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            44,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            2,
+            2,
+            68,
+            1,
+            0,
+            59
+          ]
+        }
+      ]
+    },
+    {
+      "id": "root-gif-resolved-against-the-original-host",
+      "urlIncludes": [
+        "19990310000000id_/http://assets.invalid/root.gif"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "image/gif",
+            "memento-datetime": "Wed, 10 Mar 1999 00:00:00 GMT"
+          },
+          "bodyBytes": [
+            71,
+            73,
+            70,
+            56,
+            57,
+            97,
+            1,
+            0,
+            1,
+            0,
+            128,
+            0,
+            0,
+            255,
+            255,
+            255,
+            0,
+            0,
+            0,
+            33,
+            249,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            44,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            2,
+            2,
+            68,
+            1,
+            0,
+            59
+          ]
+        }
+      ]
+    },
+    {
+      "id": "shared-gif-single-capture",
+      "urlIncludes": [
+        "19990305000000id_/http://assets.invalid/shared.gif"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "image/gif",
+            "memento-datetime": "Fri, 05 Mar 1999 00:00:00 GMT"
+          },
+          "bodyBytes": [
+            71,
+            73,
+            70,
+            56,
+            57,
+            97,
+            1,
+            0,
+            1,
+            0,
+            128,
+            0,
+            0,
+            255,
+            255,
+            255,
+            0,
+            0,
+            0,
+            33,
+            249,
+            4,
+            1,
+            0,
+            0,
+            0,
+            0,
+            44,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            2,
+            2,
+            68,
+            1,
+            0,
+            59
+          ]
+        }
+      ]
+    },
+    {
+      "id": "both-gif-further-capture-must-never-be-requested",
+      "urlIncludes": [
+        "19990101000000id_/http://assets.invalid/both.gif"
+      ],
+      "respond": [
+        {
+          "error": "the further capture of both.gif must never be requested"
+        }
+      ]
+    },
+    {
+      "id": "drift-gif-further-capture-must-never-be-requested",
+      "urlIncludes": [
+        "19990420000000id_/http://assets.invalid/drift.gif"
+      ],
+      "respond": [
+        {
+          "error": "the further capture of drift.gif must never be requested"
+        }
+      ]
+    },
+    {
+      "id": "ghost-gif-must-never-be-requested",
+      "urlIncludes": [
+        "http://assets.invalid/ghost.gif"
+      ],
+      "respond": [
+        {
+          "error": "a URL with no capture must never be requested from replay"
+        }
+      ]
+    },
+    {
+      "id": "off-scope-host-must-never-be-requested",
+      "urlIncludes": [
+        "evil.invalid"
+      ],
+      "respond": [
+        {
+          "error": "an off-scope host must never be queued or requested"
+        }
+      ]
+    }
+  ]
+}

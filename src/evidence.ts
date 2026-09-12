@@ -25,17 +25,21 @@ import {
   isComplete,
   referenceEligible,
   type ArchiveInjectionRecord,
+  type AssetLookup,
   type EncodingRecord,
   type JobState,
   type RedirectHop,
   type TimelineEntry,
   type WorkItem,
 } from './job.ts';
+import type { AssetCaptureSource, DigestObservation } from './resolve-asset.ts';
+import { captureDistanceSeconds, expandTimestamp } from './wayback.ts';
 import type { CaptureSelection } from './select.ts';
 import { zeroOutcomeCounts, type Failure, type ItemOutcome, type OutcomeRecord, type UnattemptedReason } from './outcomes.ts';
 
 export const EVIDENCE_FILE = 'evidence.json';
-export const EVIDENCE_SCHEMA_VERSION = 2;
+/** 3 added the per-asset capture resolution section (issue #6). */
+export const EVIDENCE_SCHEMA_VERSION = 3;
 
 export interface IndexedEntry {
   originalUrl: string;
@@ -112,6 +116,42 @@ export interface RecoveredFile {
   referenceEligible: boolean;
 }
 
+/**
+ * One dependency, resolved against its own captures rather than against the
+ * timestamp of the page that referenced it (issue #6).
+ *
+ * Both distances are kept. `deltaSeconds` is the distance the resolver chose,
+ * and `servedDeltaSeconds` is the distance that actually arrived: a replay
+ * redirect can land on a neighbouring capture, and an asset can therefore be
+ * acquired from further away than it was resolved to.
+ */
+export interface AssetResolutionEntry {
+  originalUrl: string;
+  localPath: string;
+  referringPageUrl: string;
+  referringTimestamp: string | null;
+  /** The capture the resolver asked for. */
+  resolvedTimestamp: string | null;
+  /** The capture the provider actually served. Null until bytes arrive. */
+  servedTimestamp: string | null;
+  deltaSeconds: number | null;
+  servedDeltaSeconds: number | null;
+  windowDays: number;
+  /** The acquired capture lies outside the documented window. */
+  temporallyDistant: boolean;
+  source: AssetCaptureSource;
+  candidateCount: number;
+  /** Every distinct content hash this URL served across its captures. */
+  distinctDigests: DigestObservation[];
+  /** The provider's digest for the chosen capture. */
+  archiveDigest: string | null;
+  /** The local SHA-256 of the bytes that arrived. Null when none did. */
+  bodyHash: string | null;
+  status: string;
+  /** Why this capture was chosen, in one line. */
+  detail: string;
+}
+
 export type GapKind =
   | 'failed-fetch'
   | 'non-content-body'
@@ -122,6 +162,8 @@ export type GapKind =
   | 'capture-era-distance'
   | 'archive-injection'
   | 'excluded-capture-only'
+  | 'temporally-distant-asset'
+  | 'asset-content-drift'
   | 'partial-inventory';
 
 export interface GapEntry {
@@ -161,6 +203,28 @@ export interface EvidenceReport {
     partial: boolean;
     /** Why the inventory is partial, when it is. Empty when it is complete. */
     partialReasons: string[];
+  };
+  /**
+   * Per-asset capture resolution (issue #6): what each dependency was resolved
+   * to, how far that is from the page that referenced it, and what the
+   * resolution cost in index requests.
+   */
+  assets: {
+    windowDays: number;
+    resolved: AssetResolutionEntry[];
+    /**
+     * Per-URL index lookups issued, one per URL at most. An empty list means
+     * every dependency was resolved from captures the inventory had already
+     * returned, for no additional index request.
+     */
+    lookups: AssetLookup[];
+    /** Index requests spent on per-asset resolution, retries included. */
+    lookupIndexRequests: number;
+    /** Assets resolved from the inventory, for no additional index request. */
+    resolvedFromInventory: number;
+    /** Assets with no capture anywhere. Each one also raises a gap. */
+    withoutCapture: number;
+    temporallyDistant: number;
   };
   counts: {
     items: number;
@@ -207,10 +271,75 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
   const recoveredFiles: RecoveredFile[] = [];
   const gaps: GapEntry[] = [];
   const byOutcome = zeroOutcomeCounts();
+  const assets: AssetResolutionEntry[] = [];
   let skipped = 0;
   let eligible = 0;
 
   for (const item of state.items) {
+    const resolution = item.capture.resolution;
+    if (resolution !== null) {
+      const servedDeltaSeconds =
+        resolution.referringTimestamp === null || item.capture.servedTimestamp === null
+          ? null
+          : captureDistanceSeconds(
+              expandTimestamp(resolution.referringTimestamp, 'start'),
+              expandTimestamp(item.capture.servedTimestamp, 'start'),
+            );
+      // The flag follows the bytes that arrived, not only the capture that was
+      // asked for: a replay redirect can land further out than the resolver
+      // chose, and that is still an asset acquired from another era.
+      const temporallyDistant =
+        resolution.temporallyDistant ||
+        (servedDeltaSeconds !== null && servedDeltaSeconds > resolution.windowDays * 86_400);
+
+      assets.push({
+        originalUrl: item.originalUrl,
+        localPath: item.localPath,
+        referringPageUrl: resolution.referringPageUrl,
+        referringTimestamp: resolution.referringTimestamp,
+        resolvedTimestamp: resolution.resolvedTimestamp,
+        servedTimestamp: item.capture.servedTimestamp,
+        deltaSeconds: resolution.deltaSeconds,
+        servedDeltaSeconds,
+        windowDays: resolution.windowDays,
+        temporallyDistant,
+        source: resolution.source,
+        candidateCount: resolution.consideredCount,
+        distinctDigests: resolution.distinctDigests,
+        archiveDigest: item.capture.archiveDigest,
+        bodyHash: item.fetch?.bodyHash ?? null,
+        status: item.status,
+        detail: resolution.detail,
+      });
+
+      if (temporallyDistant) {
+        gaps.push({
+          kind: 'temporally-distant-asset',
+          originalUrl: item.originalUrl,
+          detail:
+            `acquired from ${item.capture.servedTimestamp ?? resolution.resolvedTimestamp ?? 'an unknown capture'}, ` +
+            `${String(servedDeltaSeconds ?? resolution.deltaSeconds ?? 0)}s from the referring page ` +
+            `${resolution.referringPageUrl} at ${resolution.referringTimestamp ?? 'an unknown time'}, ` +
+            `outside the declared ${String(resolution.windowDays)}-day window`,
+          remedy: 'accept the era difference explicitly, or narrow the window and record the asset as unavailable',
+        });
+      }
+
+      // The asset URL served different content over its life, so which
+      // capture was taken decides which image the rebuilt page shows.
+      if (resolution.distinctDigests.length > 1) {
+        gaps.push({
+          kind: 'asset-content-drift',
+          originalUrl: item.originalUrl,
+          detail:
+            `this URL served ${String(resolution.distinctDigests.length)} distinct content hashes ` +
+            `(${resolution.distinctDigests
+              .map((observation) => `${observation.digest}@${observation.timestamps.join(',')}`)
+              .join('; ')}); ${resolution.detail}`,
+          remedy: 'confirm the chosen capture is the content the referring page showed',
+        });
+      }
+    }
     if (item.status === 'fetched' && item.fetch !== null) {
       fetched.push({
         originalUrl: item.originalUrl,
@@ -408,6 +537,15 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
       partial: partialReasons.length > 0,
       partialReasons,
     },
+    assets: {
+      windowDays: config.assetResolution.windowDays,
+      resolved: assets,
+      lookups: state.assetLookups,
+      lookupIndexRequests: state.assetLookups.reduce((total, lookup) => total + lookup.attempts, 0),
+      resolvedFromInventory: assets.filter((entry) => entry.source === 'inventory').length,
+      withoutCapture: assets.filter((entry) => entry.resolvedTimestamp === null).length,
+      temporallyDistant: assets.filter((entry) => entry.temporallyDistant).length,
+    },
     counts: {
       items: state.items.length,
       indexed: indexed.length,
@@ -438,7 +576,7 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
  * that filled its limit is suspect even when the provider returned no
  * continuation key, because nothing then proves the limit was not the cut.
  */
-function inventoryPartialReasons(state: JobState): string[] {
+export function inventoryPartialReasons(state: JobState): string[] {
   const reasons: string[] = [];
   if (state.inventoryRuns.length === 0) {
     reasons.push('no inventory run was recorded');
@@ -477,6 +615,9 @@ export function summarize(report: EvidenceReport): string {
     `recovered      ${counts.recoveredFiles} files with validated bytes`,
     `eligible       ${counts.referenceEligible} of those may become an M2 reference`,
     `outcomes       ${outcomeLine(counts.byOutcome)}`,
+    `assets         ${report.assets.resolved.length} resolved (${report.assets.resolvedFromInventory} from the inventory, ` +
+      `${report.assets.lookups.length} per-URL lookups costing ${report.assets.lookupIndexRequests} index requests), ` +
+      `${report.assets.withoutCapture} with no capture, ${report.assets.temporallyDistant} temporally distant`,
     `timeline       ${counts.timelineRows} non-candidate captures retained as evidence`,
     `gaps           ${report.gaps.length}`,
     `spend          ${spend.requests} requests (${spend.indexRequests} index), ${spend.bytes} bytes, ${spend.elapsedMs}ms`,

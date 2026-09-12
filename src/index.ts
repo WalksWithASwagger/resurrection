@@ -30,6 +30,15 @@ export {
 export type { CdxFilter, CdxPage, CdxQuery, CdxRow, ExcludedRow, RowPartition } from './cdx.ts';
 export type { MatchType } from './cdx.ts';
 
+export { captureKey, resolveAssetCapture, DEFAULT_ASSET_RESOLUTION } from './resolve-asset.ts';
+export type {
+  AssetCaptureSource,
+  AssetResolution,
+  AssetResolutionConfig,
+  AssetResolutionInput,
+  DigestObservation,
+} from './resolve-asset.ts';
+
 export { selectCapture, selectionTarget, CAPTURE_SELECTION_POLICIES, DEFAULT_SELECTION } from './select.ts';
 export type {
   CaptureCandidate,
@@ -60,16 +69,19 @@ export type { DiscoveredLink, LinkRelation } from './discover.ts';
 
 export {
   buildEvidenceReport,
+  inventoryPartialReasons,
   summarize,
   writeEvidenceReport,
   EVIDENCE_FILE,
   EVIDENCE_SCHEMA_VERSION,
 } from './evidence.ts';
 export type {
+  AssetResolutionEntry,
   EvidenceReport,
   FailedEntry,
   FetchedEntry,
   GapEntry,
+  GapKind,
   IndexedEntry,
   RecoveredFile,
   UnattemptedEntry,
@@ -94,7 +106,9 @@ export {
 } from './job.ts';
 export type {
   ArchiveInjectionRecord,
+  AssetLookup,
   CaptureRecord,
+  IndexedCaptureSet,
   EncodingRecord,
   FetchRecord,
   InventoryRun,

@@ -21,11 +21,19 @@ import type { CdxQuery } from './cdx.ts';
 import type { ScopeConfig } from './config.ts';
 import type { LinkRelation } from './discover.ts';
 import type { Failure, OutcomeRecord, UnattemptedReason } from './outcomes.ts';
+import type { AssetResolution } from './resolve-asset.ts';
 import type { CaptureCandidate, CaptureSelection } from './select.ts';
 
 export const JOB_FILE = 'job.json';
-/** 2 added the capture candidate set, the selection record and the timeline. */
-export const JOB_STATE_VERSION = 2;
+/**
+ * 2 added the capture candidate set, the selection record and the timeline.
+ * 3 added the capture index, the per-asset lookups and the per-asset
+ * resolution record (issue #6). A version 2 job is refused rather than
+ * resumed: its items carry no resolution and its state carries no capture
+ * index, so resuming one would report every asset as having zero captures.
+ * A loud refusal is the point; the alternative is a silently wrong report.
+ */
+export const JOB_STATE_VERSION = 3;
 
 export type ItemKind = 'page' | 'dependency';
 export type ItemStatus = 'unattempted' | 'fetched' | 'failed' | 'skipped';
@@ -55,6 +63,15 @@ export interface CaptureRecord {
   candidates: CaptureCandidate[];
   /** Which policy chose `requestedTimestamp`, and why. */
   selection: CaptureSelection | null;
+  /**
+   * The capture time of the page whose markup referenced this item. Set only
+   * for a discovered dependency; an inventory item and a seed have no
+   * referring page. It is the target per-asset resolution aims at, which is
+   * what separates issue #6's target from issue #7's declared period bound.
+   */
+  referringTimestamp: string | null;
+  /** How this item's capture was resolved (issue #6). Null for a page. */
+  resolution: AssetResolution | null;
   /** The provider's own digest, never mixed with the local body hash. */
   archiveDigest: string | null;
   /**
@@ -182,6 +199,47 @@ export interface TimelineEntry {
   excludedBy: string;
 }
 
+/**
+ * Every capture the job knows of for one original URL.
+ *
+ * The site inventory is issued with `matchType=domain`, so it already
+ * describes the captures of same-host assets. Retaining those rows here is
+ * what lets an asset be resolved against its own captures for zero additional
+ * index requests (issue #6). An entry with `source: 'targeted-lookup'` and no
+ * candidates is a recorded negative: the lookup happened and returned nothing,
+ * so it is never issued a second time.
+ */
+export interface IndexedCaptureSet {
+  originalUrl: string;
+  source: 'inventory' | 'targeted-lookup';
+  candidates: CaptureCandidate[];
+}
+
+/** One per-URL index lookup, issued only for a URL the inventory did not cover. */
+export interface AssetLookup {
+  originalUrl: string;
+  /** The page whose markup made this URL worth resolving. */
+  referringPageUrl: string;
+  query: CdxQuery;
+  requestUrl: string;
+  issuedAt: string;
+  /** Local hash of the raw lookup response, which is retained in the store. */
+  rawResponseHash: string | null;
+  rawResponsePath: string | null;
+  rowCount: number;
+  candidateRowCount: number;
+  /**
+   * The lookup filled its declared row limit, so it may not describe every
+   * capture of this URL. The same honesty the inventory owes about pagination.
+   */
+  limitReached: boolean;
+  /** Index attempts this lookup charged to the budget, retries included. */
+  attempts: number;
+  /** Budget exhaustion is not a failure: nothing was tried. */
+  outcome: 'complete' | 'failed' | 'budget-exhausted';
+  failure: Failure | null;
+}
+
 export interface JobEvent {
   at: string;
   kind: 'started' | 'resumed' | 'paused' | 'cancelled' | 'completed' | 'interrupted';
@@ -198,6 +256,10 @@ export interface JobState {
   budgets: Budgets;
   spend: BudgetSpend;
   inventoryRuns: InventoryRun[];
+  /** Every capture the inventory and the per-URL lookups have described. */
+  captureIndex: IndexedCaptureSet[];
+  /** Per-URL index lookups issued for URLs the inventory did not describe. */
+  assetLookups: AssetLookup[];
   /** Non-candidate captures, retained as evidence of when a URL changed. */
   timeline: TimelineEntry[];
   items: WorkItem[];

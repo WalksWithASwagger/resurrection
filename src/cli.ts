@@ -16,6 +16,7 @@ import { buildEvidenceReport, summarize, writeEvidenceReport } from './evidence.
 import { createFixtureTransport, loadFixtureManifest } from './fixture-transport.ts';
 import { loadJob, type JobState } from './job.ts';
 import { reclassifyJob } from './reclassify.ts';
+import { DEFAULT_ASSET_RESOLUTION } from './resolve-asset.ts';
 import { DEFAULT_SELECTION } from './select.ts';
 import { systemResolver } from './destination.ts';
 import { createLiveTransport } from './transport.ts';
@@ -181,6 +182,9 @@ async function renderReport(state: JobState, directory: string): Promise<void> {
     },
     discovery: { followRelations: [], followPageLinks: false },
     selection: DEFAULT_SELECTION,
+    // Each resolved asset carries the window that was actually applied to it;
+    // this is only the section-level default for a job that resolved none.
+    assetResolution: DEFAULT_ASSET_RESOLUTION,
     candidateFilters: [],
     outputDirectory: directory,
   });
