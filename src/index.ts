@@ -78,6 +78,7 @@ export {
 export type {
   AssetResolutionEntry,
   EvidenceReport,
+  FidelityDigest,
   FailedEntry,
   FetchedEntry,
   GapEntry,
@@ -98,6 +99,7 @@ export {
   isComplete,
   itemId,
   loadJob,
+  promotableAsReference,
   readJobProjectId,
   referenceEligible,
   saveJob,
@@ -154,8 +156,39 @@ export type {
   TemplateObservation,
 } from './classify.ts';
 
-export { classifyCollection, reclassifyJob } from './reclassify.ts';
-export type { ClassificationSummary, ReclassifyResult } from './reclassify.ts';
+export { classifyCollection, reclassifyJob, zeroFidelitySummary } from './reclassify.ts';
+export type { ClassificationSummary, FidelitySummary, ReclassifyResult } from './reclassify.ts';
+
+export {
+  bandFor,
+  buildSegmentFrequency,
+  crossCaptureAgreement,
+  scoreItem,
+  segmentsOf,
+  weakestSignal,
+  ASSET_CREDIT,
+  DEFAULT_FIDELITY,
+  DEFAULT_FIDELITY_THRESHOLDS,
+  DEFAULT_FIDELITY_TUNING,
+  DEFAULT_FIDELITY_WEIGHTS,
+  FIDELITY_SIGNALS,
+} from './fidelity.ts';
+export type {
+  AssetSummary,
+  CrossCaptureAgreement,
+  CrossCaptureState,
+  FidelityBand,
+  FidelityConfig,
+  FidelityContext,
+  FidelityInput,
+  FidelityOverride,
+  FidelityScore,
+  FidelitySignal,
+  FidelitySignalName,
+  FidelityThresholds,
+  FidelityTuning,
+  FidelityWeights,
+} from './fidelity.ts';
 
 export { parseRetryAfter, RateLimiter } from './ratelimit.ts';
 

@@ -50,14 +50,17 @@ test('the destination guard uses a networking module only to classify addresses'
   assert.doesNotMatch(source, /\bfetch\s*\(/u);
 });
 
-test('classification, selection and stripping cannot refetch, because none holds a transport', async () => {
+test('classification, scoring, selection and stripping cannot refetch, because none holds a transport', async () => {
   // Issue #5 requires that reclassifying an existing collection costs zero
   // refetches, issue #7 requires the same of reselecting a capture from the
-  // alternatives already on record, and issue #6 requires the same of
-  // resolving an asset against captures the inventory already returned. A
-  // counter can show that a given run made none; this shows those passes have
-  // nothing to make one with.
-  for (const name of ['classify.ts', 'reclassify.ts', 'resolve-asset.ts', 'select.ts', 'toolbar.ts']) {
+  // alternatives already on record, issue #6 requires the same of resolving an
+  // asset against captures the inventory already returned, and issue #8
+  // requires the same of recomputing a fidelity score. A counter can show that
+  // a given run made none; this shows those passes have nothing to make one
+  // with. `fidelity.ts` is the one that would be most tempting to break:
+  // comparing adjacent captures by text rather than by digest would need a
+  // fetch, so the absence of a transport here is what pins that decision.
+  for (const name of ['classify.ts', 'fidelity.ts', 'reclassify.ts', 'resolve-asset.ts', 'select.ts', 'toolbar.ts']) {
     const source = await readFile(join(SRC, name), 'utf8');
     assert.doesNotMatch(source, /\bHttpTransport\b|\bfetchResource\b|\bcreateLiveTransport\b/u, `${name} must not fetch`);
   }

@@ -156,8 +156,14 @@ that validated bytes are no longer sufficient for the next milestone to use
 them. **M2 selects from `referenceEligible` items and from nothing else.**
 
 Marking eligibility is where this stops. Freezing the reference bundle is M2,
-choosing an alternative capture for a bad outcome is issue #6 and issue #7, and
-scoring fidelity is issue #8.
+and choosing an alternative capture for a bad outcome is issue #6 and issue #7.
+
+Fidelity scoring (issue #8, [FIDELITY.md](FIDELITY.md)) composes with this rule
+rather than competing with it, and this rule wins. An item whose outcome is not
+`ok` is never scored at all, so no number can argue with the verdict above. A
+score can only narrow what is already eligible, through
+`promotableAsReference`, and `counts.referenceEligible` here is untouched by
+it.
 
 ## Reclassifying costs nothing
 
