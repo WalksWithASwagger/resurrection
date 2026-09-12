@@ -1,9 +1,16 @@
 {
   "schema_version": 1,
   "document_type": "pilot_plan",
-  "updated_at": "2026-09-06",
-  "implementation_status": "not_implemented",
-  "purpose": "Declare pilot order and evidence required before the second recovery. This file is planning data, not an executable scheduler or proof of enforcement.",
+  "updated_at": "2026-09-12",
+  "implementation_status": "not_enforced_by_code",
+  "engine_status": {
+    "acquisition_core": "delivered_against_fixtures",
+    "live_acquisition_performed": false,
+    "ai_generator": "not_implemented",
+    "browser_evaluator": "not_implemented",
+    "detail": "M1 delivered by pull requests 12, 14, 15, 16, 17 and 18, plus outcome classification, per-asset capture resolution, CDX hardening and fidelity scoring. A live provider call remains human-approved under safety.network_isolation in agentic/contract.json."
+  },
+  "purpose": "Declare pilot order and evidence required before the second recovery. This file is planning data, not an executable scheduler or proof of enforcement: nothing in src/ reads it. implementation_status describes this file, not the codebase; engine_status describes the codebase.",
   "readiness_conditions": {
     "R1": "First pilot has a frozen, source-linked reference bundle and declared gaps.",
     "R2": "All required scoped visual and interaction checks pass for the first pilot.",
@@ -22,7 +29,7 @@
       "discovery_status": "not_started_in_resurrection",
       "reference_status": "not_frozen",
       "validation_status": "not_run",
-      "notes": "Choose historical evidence before generation. An existing modern portal is not the historical visual reference. Do not import private project materials into this public repository."
+      "notes": "Choose historical evidence before generation. An existing modern portal is not the historical visual reference. Do not import private project materials into this public repository. The acquisition engine is ready and its fixture and isolation tests pass; the bounded live acquisition is a human-approved action that has not been performed."
     },
     {
       "id": "spark-online",
@@ -36,11 +43,28 @@
       "selected_capture_period": null,
       "status": "deferred_until_ready",
       "depends_on": "uncleweed",
-      "required_readiness_conditions": ["R1", "R2", "R3", "R4", "R5"],
+      "required_readiness_conditions": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5"
+      ],
       "readiness_status": "not_evaluated",
       "discovery_status": "not_started",
       "validation_status": "not_run",
       "notes": "Begin discovery only after readiness conditions pass. Verify actual historical captures and site identity then. Do not infer a launch date or substitute a later unrelated site."
     }
-  ]
+  ],
+  "readiness_status": {
+    "R1": "not_met",
+    "R2": "not_met",
+    "R3": "not_met",
+    "R4": "met",
+    "R5": "partly_met"
+  },
+  "readiness_notes": {
+    "R4": "Missing-source, retry/resume, budget, untrusted-input and network-isolation tests pass.",
+    "R5": "The engine runs from configuration with no site-specific branches, but the evidence report carries no code or fixture revision field."
+  }
 }
