@@ -23,6 +23,7 @@ import {
 
 const FIXTURE_ROOT = fileURLToPath(new URL('../../fixtures/demo-site/', import.meta.url));
 const OUTCOME_ROOT = fileURLToPath(new URL('../../fixtures/outcome-site/', import.meta.url));
+const REPLAY_ROOT = fileURLToPath(new URL('../../fixtures/replay-site/', import.meta.url));
 
 export const MANIFEST_PATH = join(FIXTURE_ROOT, 'manifest.json');
 export const PROJECT_PATH = join(FIXTURE_ROOT, 'project.json');
@@ -75,6 +76,19 @@ export async function outcomeHarness(directory: string, manifest?: FixtureManife
   return {
     config: { ...config, outputDirectory: directory },
     handle: createFixtureTransport(manifest ?? (await outcomeManifest())),
+    clock: createTestClock(FIXTURE_EPOCH),
+  };
+}
+
+/** The replay-modifier, timeline and selection collection behind issue #7. */
+export const REPLAY_MANIFEST_PATH = join(REPLAY_ROOT, 'manifest.json');
+export const REPLAY_PROJECT_PATH = join(REPLAY_ROOT, 'project.json');
+
+export async function replayHarness(directory: string, manifest?: FixtureManifest): Promise<Harness> {
+  const config = await loadProjectConfig(REPLAY_PROJECT_PATH);
+  return {
+    config: { ...config, outputDirectory: directory },
+    handle: createFixtureTransport(manifest ?? (await loadFixtureManifest(REPLAY_MANIFEST_PATH))),
     clock: createTestClock(FIXTURE_EPOCH),
   };
 }

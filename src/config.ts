@@ -12,8 +12,14 @@
 import { readFile } from 'node:fs/promises';
 
 import { DEFAULT_BUDGETS, type Budgets } from './budget.ts';
-import { DEFAULT_CDX_ENDPOINT, type MatchType } from './cdx.ts';
+import { DEFAULT_CANDIDATE_FILTERS, DEFAULT_CDX_ENDPOINT, parseCdxFilter, type MatchType } from './cdx.ts';
 import { DEFAULT_REPLAY_ENDPOINT } from './wayback.ts';
+import {
+  CAPTURE_SELECTION_POLICIES,
+  DEFAULT_SELECTION,
+  type CaptureSelectionPolicy,
+  type SelectionConfig,
+} from './select.ts';
 import type { LinkRelation } from './discover.ts';
 
 export interface ProviderConfig {
@@ -50,6 +56,13 @@ export interface ProjectConfig {
   budgets: Budgets;
   provider: ProviderConfig;
   discovery: DiscoveryConfig;
+  /** Which capture is chosen when the inventory offers several. */
+  selection: SelectionConfig;
+  /**
+   * CDX filter expressions an indexed row must satisfy to become an
+   * acquisition candidate. A row that fails one is kept as timeline evidence.
+   */
+  candidateFilters: string[];
   /** Where the job state, object store and reports are written. */
   outputDirectory: string;
 }
@@ -141,12 +154,37 @@ export function parseProjectConfig(value: unknown, source: string): ProjectConfi
       discoveryRaw['followPageLinks'] === undefined ? false : discoveryRaw['followPageLinks'] === true,
   };
 
+  const selectionRaw = optionalObject(raw['selection']);
+  const policy = (selectionRaw['policy'] ?? DEFAULT_SELECTION.policy) as CaptureSelectionPolicy;
+  if (!CAPTURE_SELECTION_POLICIES.includes(policy)) {
+    throw new Error(
+      `project config ${source}: selection.policy must be one of ${CAPTURE_SELECTION_POLICIES.join(', ')}`,
+    );
+  }
+  const clusterWindowDays = optionalNumber(
+    selectionRaw['clusterWindowDays'],
+    DEFAULT_SELECTION.clusterWindowDays,
+    'selection.clusterWindowDays',
+    source,
+  );
+  if (clusterWindowDays <= 0) {
+    throw new Error(`project config ${source}: selection.clusterWindowDays must be a positive number`);
+  }
+
+  const candidateFilters =
+    raw['candidateFilters'] === undefined
+      ? [...DEFAULT_CANDIDATE_FILTERS]
+      : stringArray(raw['candidateFilters'], 'candidateFilters', source);
+  for (const expression of candidateFilters) parseCdxFilter(expression);
+
   return {
     projectId,
     scope,
     budgets,
     provider,
     discovery,
+    selection: { policy, clusterWindowDays },
+    candidateFilters,
     outputDirectory: requireString(raw['outputDirectory'], 'outputDirectory', source),
   };
 }

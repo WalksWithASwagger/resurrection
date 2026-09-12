@@ -72,6 +72,45 @@ test('an indexed URL keeps its alternative captures for later reselection', asyn
     assert.deepEqual(home?.alternatives, ['19990315120000', '19980101000000']);
     assert.equal(home?.requestedTimestamp, '19990315120000');
     assert.equal(home?.archiveDigest, 'DEMOHOMEDIGEST1');
+    // The capture is a declared choice, not row order: the project's period
+    // ends in 1999 and the default policy aims at that bound.
+    assert.equal(home?.selection?.policy, 'nearest');
+    assert.equal(home?.selection?.target, '19991231235959');
+    assert.equal(home?.selection?.consideredCount, 2);
+    assert.equal(home?.selection?.fromExcludedCapture, false);
+  });
+});
+
+test('every acquired body is scanned for archive injection and every scan comes back clean', async () => {
+  await withTempDirectory(async (directory) => {
+    const { report } = await acquire(directory);
+    const textBodies = report.fetched.filter((entry) => entry.encoding?.kind === 'text');
+
+    assert.ok(textBodies.length > 0);
+    for (const entry of textBodies) {
+      assert.equal(entry.archiveInjection?.scanned, true, `${entry.originalUrl} must be scanned`);
+      assert.equal(
+        entry.archiveInjection?.removedNodes,
+        0,
+        `${entry.originalUrl} was fetched with ${entry.replayModifier} and must carry no injected markup`,
+      );
+    }
+    assert.equal(report.gaps.some((gap) => gap.kind === 'archive-injection'), false);
+  });
+});
+
+test('the whole inventory came back, so no capture is held back as timeline evidence', async () => {
+  await withTempDirectory(async (directory) => {
+    const { report } = await acquire(directory);
+
+    assert.deepEqual(report.inventory.candidateFilters, ['statuscode:200']);
+    assert.equal(report.counts.timelineRows, 0, 'every demo capture is a 200');
+    assert.deepEqual(report.inventory.partialReasons, []);
+    for (const query of report.inventory.queries) {
+      assert.match(query, /output=json/u);
+      assert.match(query, /collapse=digest/u);
+      assert.match(query, /showResumeKey=true/u);
+    }
   });
 });
 

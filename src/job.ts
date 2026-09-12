@@ -21,9 +21,11 @@ import type { CdxQuery } from './cdx.ts';
 import type { ScopeConfig } from './config.ts';
 import type { LinkRelation } from './discover.ts';
 import type { Failure, OutcomeRecord, UnattemptedReason } from './outcomes.ts';
+import type { CaptureCandidate, CaptureSelection } from './select.ts';
 
 export const JOB_FILE = 'job.json';
-export const JOB_STATE_VERSION = 1;
+/** 2 added the capture candidate set, the selection record and the timeline. */
+export const JOB_STATE_VERSION = 2;
 
 export type ItemKind = 'page' | 'dependency';
 export type ItemStatus = 'unattempted' | 'fetched' | 'failed' | 'skipped';
@@ -41,9 +43,18 @@ export interface CaptureRecord {
   /** The capture time the provider actually served. */
   servedTimestamp: string | null;
   distanceSeconds: number | null;
+  /** `id_` for pages, assets and documents; `if_` for frames. */
   replayModifier: string;
   /** Other captures the inventory offered, kept for reselection in M2. */
   alternatives: string[];
+  /**
+   * Every capture the inventory offered, with the row metadata a selection
+   * policy needs. Retaining it is what makes reselecting a different capture
+   * cost zero index requests.
+   */
+  candidates: CaptureCandidate[];
+  /** Which policy chose `requestedTimestamp`, and why. */
+  selection: CaptureSelection | null;
   /** The provider's own digest, never mixed with the local body hash. */
   archiveDigest: string | null;
   /**
@@ -72,6 +83,23 @@ export interface FetchRecord {
   retrievedAt: string;
   /** Bytes arrived and passed response and content validation. */
   validated: boolean;
+  /**
+   * What the defensive archive-injection strip found. On a correct identity
+   * fetch this records a clean scan, which is the evidence that the stripper
+   * is insurance rather than load-bearing work.
+   */
+  archiveInjection: ArchiveInjectionRecord | null;
+}
+
+export interface ArchiveInjectionRecord {
+  /** False for a binary body, where there is no markup to scan. */
+  scanned: boolean;
+  removedNodes: number;
+  /** Which rules fired. Body text never reaches the record. */
+  rules: string[];
+  removedCharacters: number;
+  /** Injection markers still present after stripping. */
+  residualMarkers: string[];
 }
 
 /** The decode decision, flattened from DecodeResult for the evidence report. */
@@ -125,10 +153,33 @@ export interface InventoryRun {
   rawResponseHash: string | null;
   rawResponsePath: string | null;
   rowCount: number;
+  /**
+   * The acquisition-candidate rule applied to this run's rows. It is applied
+   * here rather than sent upstream, so excluded rows survive as evidence.
+   */
+  candidateFilters: string[];
+  candidateRowCount: number;
+  /** Rows excluded from acquisition and kept in `JobState.timeline`. */
+  timelineRowCount: number;
   resumeKey: string | null;
   limitReached: boolean;
   outcome: 'complete' | 'continued' | 'failed';
   failure: Failure | null;
+}
+
+/**
+ * A capture that is evidence of the origin's history rather than a page to
+ * rebuild: a redirect, a gone URL, a server error. Retained, never fetched.
+ */
+export interface TimelineEntry {
+  originalUrl: string;
+  timestamp: string;
+  statusCode: string;
+  mimetype: string;
+  digest: string;
+  length: string;
+  /** The candidate filter expression this row failed, verbatim. */
+  excludedBy: string;
 }
 
 export interface JobEvent {
@@ -147,6 +198,8 @@ export interface JobState {
   budgets: Budgets;
   spend: BudgetSpend;
   inventoryRuns: InventoryRun[];
+  /** Non-candidate captures, retained as evidence of when a URL changed. */
+  timeline: TimelineEntry[];
   items: WorkItem[];
   events: JobEvent[];
 }
@@ -179,6 +232,23 @@ export async function saveJob(directory: string, state: JobState): Promise<void>
   const temporary = `${path}.${process.pid}.partial`;
   await writeFile(temporary, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
   await rename(temporary, path);
+}
+
+/**
+ * The project a job on disk belongs to, read without validating its version.
+ *
+ * The demo entry point clears only its own output directory, and it has to be
+ * able to make that check against a job written by an older build of this
+ * package. Refusing to read the name would turn a stale directory into a
+ * verification command that fails on prior working-tree state.
+ */
+export async function readJobProjectId(directory: string): Promise<string | null> {
+  const text = await readFile(join(directory, JOB_FILE), 'utf8').catch(() => null);
+  if (text === null) return null;
+  const parsed: unknown = JSON.parse(text);
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const projectId = (parsed as { projectId?: unknown }).projectId;
+  return typeof projectId === 'string' ? projectId : null;
 }
 
 export async function loadJob(directory: string): Promise<JobState | null> {

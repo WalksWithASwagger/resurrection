@@ -1,0 +1,41 @@
+{
+  "projectId": "replay-site",
+  "scope": {
+    "url": "replay.invalid",
+    "matchType": "domain",
+    "from": "1999",
+    "to": "1999",
+    "seedUrls": [],
+    "dependencyHosts": [
+      "replay.invalid"
+    ]
+  },
+  "budgets": {
+    "maxRequests": 20,
+    "maxIndexRequests": 3,
+    "maxTotalBytes": 1048576,
+    "maxResponseBytes": 262144,
+    "maxElapsedMs": 60000,
+    "maxRedirects": 3,
+    "maxAttemptsPerItem": 2,
+    "maxPages": 3,
+    "maxDependencies": 2
+  },
+  "provider": {
+    "cdxEndpoint": "https://web.archive.org/cdx/search/cdx",
+    "replayEndpoint": "https://web.archive.org/web",
+    "allowedHosts": [
+      "web.archive.org"
+    ],
+    "minRequestIntervalMs": 1,
+    "requestTimeoutMs": 30000
+  },
+  "discovery": {
+    "followRelations": [
+      "frame"
+    ],
+    "followPageLinks": false
+  },
+  "outputDirectory": "tmp/replay-acquisition",
+  "description": "Fixture project for the pinned CDX query shape, replay modifiers and capture selection. maxPages is 3, so the index limit is 12 and an inventory of exactly 12 rows fills it: that is how a truncated inventory is proved never to be reported as complete."
+}

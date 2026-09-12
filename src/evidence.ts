@@ -24,11 +24,14 @@ import type { ProjectConfig } from './config.ts';
 import {
   isComplete,
   referenceEligible,
+  type ArchiveInjectionRecord,
   type EncodingRecord,
   type JobState,
   type RedirectHop,
+  type TimelineEntry,
   type WorkItem,
 } from './job.ts';
+import type { CaptureSelection } from './select.ts';
 import { zeroOutcomeCounts, type Failure, type ItemOutcome, type OutcomeRecord, type UnattemptedReason } from './outcomes.ts';
 
 export const EVIDENCE_FILE = 'evidence.json';
@@ -40,6 +43,8 @@ export interface IndexedEntry {
   relation: string;
   requestedTimestamp: string | null;
   alternatives: string[];
+  /** Which policy chose the requested capture, and why. */
+  selection: CaptureSelection | null;
   archiveDigest: string | null;
   discoveredFrom: string | null;
 }
@@ -63,6 +68,8 @@ export interface FetchedEntry {
   storePath: string | null;
   contentType: string | null;
   encoding: EncodingRecord | null;
+  /** What the defensive archive-injection strip found in these bytes. */
+  archiveInjection: ArchiveInjectionRecord | null;
   outcome: OutcomeRecord | null;
 }
 
@@ -112,7 +119,10 @@ export type GapKind =
   | 'no-capture'
   | 'degraded-encoding'
   | 'truncated-body'
-  | 'capture-era-distance';
+  | 'capture-era-distance'
+  | 'archive-injection'
+  | 'excluded-capture-only'
+  | 'partial-inventory';
 
 export interface GapEntry {
   kind: GapKind;
@@ -132,8 +142,25 @@ export interface EvidenceReport {
   spend: BudgetSpend;
   inventory: {
     runs: JobState['inventoryRuns'];
+    /**
+     * Every CDX query string this job issued, verbatim and in order. A report
+     * that does not say which query was asked cannot be audited for coverage.
+     */
+    queries: string[];
+    /**
+     * The acquisition-candidate rules applied locally to the returned rows.
+     * They are not sent upstream, so excluded rows survive in `timeline`.
+     */
+    candidateFilters: string[];
+    /**
+     * Captures excluded from acquisition and kept as evidence of when a URL
+     * moved or died. Excluded is not deleted.
+     */
+    timeline: TimelineEntry[];
     /** True when an index run stopped early, so the inventory is partial. */
     partial: boolean;
+    /** Why the inventory is partial, when it is. Empty when it is complete. */
+    partialReasons: string[];
   };
   counts: {
     items: number;
@@ -145,6 +172,8 @@ export interface EvidenceReport {
     recoveredFiles: number;
     /** The subset of recoveredFiles an M2 reference may be frozen from. */
     referenceEligible: number;
+    /** Indexed captures retained as timeline evidence, never fetched. */
+    timelineRows: number;
     /** Every outcome in the closed set, zero-filled. Sums to `items`. */
     byOutcome: Record<ItemOutcome, number>;
   };
@@ -167,6 +196,7 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
     relation: item.relation,
     requestedTimestamp: item.capture.requestedTimestamp,
     alternatives: item.capture.alternatives,
+    selection: item.capture.selection,
     archiveDigest: item.capture.archiveDigest,
     discoveredFrom: item.discoveredFrom,
   }));
@@ -200,7 +230,24 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
         storePath: item.fetch.storePath,
         contentType: item.fetch.contentType,
         encoding: item.encoding,
+        archiveInjection: item.fetch.archiveInjection,
         outcome: item.outcome,
+      });
+    }
+
+    // Injected replay markup in acquired bytes means the replay modifier did
+    // not do its job. The stripper caught it, and that is worth surfacing
+    // rather than quietly absorbing: it is a signal about the provider.
+    if ((item.fetch?.archiveInjection?.removedNodes ?? 0) > 0) {
+      const injection = item.fetch?.archiveInjection;
+      gaps.push({
+        kind: 'archive-injection',
+        originalUrl: item.originalUrl,
+        detail:
+          `the defensive strip removed ${String(injection?.removedNodes ?? 0)} archive-injected node(s) ` +
+          `(${(injection?.rules ?? []).join(', ')}) from bytes fetched with ` +
+          `${item.capture.replayModifier}`,
+        remedy: 'confirm the replay modifier reached the provider; the stored bytes are not raw capture bytes',
       });
     }
 
@@ -254,6 +301,20 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
         remedy: item.failure.retryable
           ? 'resume the job with retry enabled, or select an alternative capture'
           : 'select an alternative capture or record the item as unavailable',
+      });
+    }
+
+    // The only captures of this URL are ones the origin answered with a
+    // redirect or an error. The bytes are worth having, the outcome pass will
+    // say what they are, and they are never quietly treated as the page.
+    if (item.capture.selection?.fromExcludedCapture === true) {
+      gaps.push({
+        kind: 'excluded-capture-only',
+        originalUrl: item.originalUrl,
+        detail: `every indexed capture failed the candidate filter; acquired ${
+          item.capture.requestedTimestamp ?? 'an unknown capture'
+        } with archive status ${item.capture.archiveStatus ?? 'unknown'}`,
+        remedy: 'widen the inventory period to look for a capture the origin answered normally',
       });
     }
 
@@ -321,6 +382,16 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
     }
   }
 
+  const partialReasons = inventoryPartialReasons(state);
+  if (partialReasons.length > 0) {
+    gaps.push({
+      kind: 'partial-inventory',
+      originalUrl: state.scope.url,
+      detail: partialReasons.join('; '),
+      remedy: 'resume the job, or raise the page and index-request budgets, before treating this inventory as the whole site',
+    });
+  }
+
   return {
     schemaVersion: EVIDENCE_SCHEMA_VERSION,
     projectId: config.projectId,
@@ -331,12 +402,11 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
     spend: state.spend,
     inventory: {
       runs: state.inventoryRuns,
-      // A continued run followed by a complete one is a finished inventory.
-      // Partial means the last run stopped early or failed outright.
-      partial:
-        state.inventoryRuns.length === 0 ||
-        state.inventoryRuns.at(-1)?.outcome !== 'complete' ||
-        state.inventoryRuns.some((run) => run.outcome === 'failed'),
+      queries: state.inventoryRuns.map((run) => run.requestUrl),
+      candidateFilters: [...new Set(state.inventoryRuns.flatMap((run) => run.candidateFilters))],
+      timeline: state.timeline,
+      partial: partialReasons.length > 0,
+      partialReasons,
     },
     counts: {
       items: state.items.length,
@@ -347,6 +417,7 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
       skipped,
       recoveredFiles: recoveredFiles.length,
       referenceEligible: eligible,
+      timelineRows: state.timeline.length,
       byOutcome,
     },
     indexed,
@@ -357,6 +428,33 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
     gaps,
     events: state.events,
   };
+}
+
+/**
+ * Why an inventory may not be the whole site.
+ *
+ * A truncated inventory reported as complete is the failure this list exists
+ * to prevent: it turns "we never asked" into "there was nothing there". A run
+ * that filled its limit is suspect even when the provider returned no
+ * continuation key, because nothing then proves the limit was not the cut.
+ */
+function inventoryPartialReasons(state: JobState): string[] {
+  const reasons: string[] = [];
+  if (state.inventoryRuns.length === 0) {
+    reasons.push('no inventory run was recorded');
+    return reasons;
+  }
+  const last = state.inventoryRuns.at(-1);
+  if (last?.outcome === 'continued') {
+    reasons.push(`the last index run stopped with an unused continuation key (${last.id})`);
+  }
+  for (const run of state.inventoryRuns) {
+    if (run.outcome === 'failed') reasons.push(`${run.id} failed: ${run.failure?.kind ?? 'unknown'}`);
+    if (run.limitReached) {
+      reasons.push(`${run.id} returned ${String(run.rowCount)} rows and filled its declared limit`);
+    }
+  }
+  return reasons;
 }
 
 export async function writeEvidenceReport(directory: string, report: EvidenceReport): Promise<string> {
@@ -379,10 +477,12 @@ export function summarize(report: EvidenceReport): string {
     `recovered      ${counts.recoveredFiles} files with validated bytes`,
     `eligible       ${counts.referenceEligible} of those may become an M2 reference`,
     `outcomes       ${outcomeLine(counts.byOutcome)}`,
+    `timeline       ${counts.timelineRows} non-candidate captures retained as evidence`,
     `gaps           ${report.gaps.length}`,
     `spend          ${spend.requests} requests (${spend.indexRequests} index), ${spend.bytes} bytes, ${spend.elapsedMs}ms`,
     `inventory      ${report.inventory.partial ? 'partial' : 'complete'}`,
   ];
+  for (const reason of report.inventory.partialReasons) lines.push(`               ${reason}`);
   return lines.join('\n');
 }
 

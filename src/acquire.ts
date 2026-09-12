@@ -17,7 +17,7 @@ import { join } from 'node:path';
 
 import { BudgetLedger, EMPTY_SPEND } from './budget.ts';
 import { systemClock, type Clock } from './clock.ts';
-import { buildCdxUrl, parseCdxJson, type CdxQuery, type CdxRow } from './cdx.ts';
+import { buildCdxUrl, parseCdxFilter, parseCdxJson, rowExclusion, type CdxQuery, type CdxRow } from './cdx.ts';
 import type { ProjectConfig } from './config.ts';
 import { decodeBody, type DecodeResult } from './decode.ts';
 import { DEFAULT_ALLOWED_PORTS, type DnsResolver } from './destination.ts';
@@ -30,6 +30,7 @@ import {
   itemId,
   loadJob,
   saveJob,
+  type ArchiveInjectionRecord,
   type EncodingRecord,
   type InventoryRun,
   type JobState,
@@ -37,10 +38,17 @@ import {
 } from './job.ts';
 import { RateLimiter } from './ratelimit.ts';
 import { classifyCollection } from './reclassify.ts';
+import { selectCapture, selectionTarget, type CaptureCandidate } from './select.ts';
 import { BodyStore } from './store.ts';
+import { stripArchiveInjection } from './toolbar.ts';
 import type { HttpTransport } from './transport.ts';
 import { validateBody } from './validate.ts';
-import { buildReplayUrl, captureDistanceSeconds, IDENTITY_MODIFIER, servedTimestamp } from './wayback.ts';
+import {
+  buildReplayUrl,
+  captureDistanceSeconds,
+  replayModifierFor,
+  servedTimestamp,
+} from './wayback.ts';
 
 export type ControlSignal = 'continue' | 'pause' | 'cancel';
 
@@ -120,6 +128,10 @@ export async function runAcquisition(options: AcquisitionOptions): Promise<Acqui
   let halted: 'paused' | 'cancelled' | null = null;
   try {
     halted = await runInventory(state, config, context, store, clock);
+    // Pure, and over candidates the inventory already returned, so it costs no
+    // index request. Running it on every pass is what lets an operator change
+    // the policy and resume to reselect for free.
+    applyCaptureSelection(state, config);
     if (halted === null) {
       seedPageItems(state, config, clock);
       halted = await runFetchLoop(state, config, context, store, clock, options.signal);
@@ -166,6 +178,7 @@ function newJobState(config: ProjectConfig, clock: Clock): JobState {
     budgets: config.budgets,
     spend: { ...EMPTY_SPEND },
     inventoryRuns: [],
+    timeline: [],
     items: [],
     events: [],
   };
@@ -186,6 +199,7 @@ async function runInventory(
   if (last !== undefined && last.outcome === 'complete') return null;
 
   let resumeKey = last?.outcome === 'continued' ? last.resumeKey : null;
+  const filters = config.candidateFilters.map(parseCdxFilter);
 
   for (;;) {
     const query: CdxQuery = {
@@ -208,6 +222,9 @@ async function runInventory(
       rawResponseHash: null,
       rawResponsePath: null,
       rowCount: 0,
+      candidateFilters: [...config.candidateFilters],
+      candidateRowCount: 0,
+      timelineRowCount: 0,
       resumeKey: null,
       limitReached: false,
       outcome: 'failed',
@@ -236,13 +253,32 @@ async function runInventory(
       contentType: result.response.headers['content-type'] ?? null,
     });
     const page = parseCdxJson(decoded.text ?? '', query.limit);
+    // The status rule is applied here rather than sent upstream: a redirect or
+    // an error row is not something to rebuild from, and it is also the
+    // evidence of when the URL moved or died, so it is excluded and kept.
+    const verdicts = page.rows.map((row) => ({ row, excludedBy: rowExclusion(row, filters) }));
     run.rowCount = page.rows.length;
+    run.candidateRowCount = verdicts.filter((verdict) => verdict.excludedBy === null).length;
+    run.timelineRowCount = verdicts.length - run.candidateRowCount;
     run.resumeKey = page.resumeKey;
     run.limitReached = page.limitReached;
     run.outcome = page.resumeKey === null ? 'complete' : 'continued';
     state.inventoryRuns.push(run);
 
-    recordInventoryRows(state, config, page.rows, clock);
+    for (const { row, excludedBy } of verdicts) {
+      if (excludedBy === null || row.original === '' || row.timestamp === '') continue;
+      state.timeline.push({
+        originalUrl: row.original,
+        timestamp: row.timestamp,
+        statusCode: row.statusCode,
+        mimetype: row.mimetype,
+        digest: row.digest,
+        length: row.length,
+        excludedBy,
+      });
+    }
+
+    recordInventoryRows(state, config, verdicts, clock);
 
     if (page.resumeKey === null) return null;
     if (countKind(state, 'page') >= config.budgets.maxPages) return null;
@@ -251,27 +287,26 @@ async function runInventory(
 }
 
 /**
- * One item per original URL, carrying every capture the inventory offered.
- *
- * The chosen capture is the latest inside the declared period, with the others
- * retained as alternatives so a later step can reselect without another index
- * request. Issue #7 replaces this rule with an explicit selection policy.
+ * One item per original URL, carrying every capture the inventory offered and
+ * whether each one passed the candidate filter. Which capture is requested is
+ * decided afterwards, by policy, in `applyCaptureSelection`: captures arrive
+ * across paginated runs, so a rule applied row by row would be deciding on a
+ * partial set.
  */
-function recordInventoryRows(state: JobState, config: ProjectConfig, rows: CdxRow[], clock: Clock): void {
-  for (const row of rows) {
+function recordInventoryRows(
+  state: JobState,
+  config: ProjectConfig,
+  verdicts: readonly { row: CdxRow; excludedBy: string | null }[],
+  clock: Clock,
+): void {
+  for (const { row, excludedBy } of verdicts) {
     if (row.original === '' || row.timestamp === '') continue;
+    const candidate = candidateFromRow(row, excludedBy);
     const existing = state.items.find((item) => item.id === itemId(row.original));
     if (existing !== undefined) {
       if (!existing.capture.alternatives.includes(row.timestamp)) {
         existing.capture.alternatives.push(row.timestamp);
-      }
-      if (
-        existing.status === 'unattempted' &&
-        (existing.capture.requestedTimestamp === null || row.timestamp > existing.capture.requestedTimestamp)
-      ) {
-        existing.capture.requestedTimestamp = row.timestamp;
-        existing.capture.archiveDigest = row.digest === '' ? null : row.digest;
-        existing.capture.archiveStatus = row.statusCode === '' ? null : row.statusCode;
+        existing.capture.candidates.push(candidate);
       }
       continue;
     }
@@ -283,11 +318,41 @@ function recordInventoryRows(state: JobState, config: ProjectConfig, rows: CdxRo
         relation: 'page',
         discoveredFrom: null,
         requestedTimestamp: row.timestamp,
-        archiveDigest: row.digest === '' ? null : row.digest,
-        archiveStatus: row.statusCode === '' ? null : row.statusCode,
+        candidate,
         at: iso(clock),
       }),
     );
+  }
+}
+
+function candidateFromRow(row: CdxRow, excludedBy: string | null): CaptureCandidate {
+  const length = Number.parseInt(row.length, 10);
+  return {
+    timestamp: row.timestamp,
+    digest: row.digest === '' ? null : row.digest,
+    statusCode: row.statusCode === '' ? null : row.statusCode,
+    mimetype: row.mimetype === '' ? null : row.mimetype,
+    length: Number.isFinite(length) ? length : null,
+    excludedBy,
+  };
+}
+
+/**
+ * Apply the declared capture selection policy to every item still waiting on a
+ * request. An item that already holds validated bytes is never re-pointed: the
+ * acquired evidence stands, and reselecting it is an explicit later step.
+ */
+export function applyCaptureSelection(state: JobState, config: ProjectConfig): void {
+  const target = selectionTarget(state.scope);
+  for (const item of state.items) {
+    if (item.status !== 'unattempted' || item.capture.candidates.length === 0) continue;
+    const selection = selectCapture(item.capture.candidates, config.selection, target);
+    if (selection === null) continue;
+    const chosen = item.capture.candidates.find((candidate) => candidate.timestamp === selection.timestamp);
+    item.capture.selection = selection;
+    item.capture.requestedTimestamp = selection.timestamp;
+    item.capture.archiveDigest = chosen?.digest ?? null;
+    item.capture.archiveStatus = chosen?.statusCode ?? null;
   }
 }
 
@@ -302,8 +367,6 @@ function seedPageItems(state: JobState, config: ProjectConfig, clock: Clock): vo
         relation: 'page',
         discoveredFrom: 'configuration seedUrls',
         requestedTimestamp: config.scope.to ?? config.scope.from,
-        archiveDigest: null,
-        archiveStatus: null,
         at: iso(clock),
       }),
     );
@@ -367,7 +430,8 @@ async function acquireItem(
     return false;
   }
 
-  const requestUrl = buildReplayUrl(config.provider.replayEndpoint, timestamp, item.originalUrl);
+  const modifier = replayModifierFor(item.relation);
+  const requestUrl = buildReplayUrl(config.provider.replayEndpoint, timestamp, item.originalUrl, modifier);
   const result = await fetchResource(context, requestUrl, 'resource');
 
   if (!result.ok && result.exhausted !== null) {
@@ -377,7 +441,7 @@ async function acquireItem(
     return true;
   }
 
-  item.capture.replayModifier = IDENTITY_MODIFIER;
+  item.capture.replayModifier = modifier;
 
   if (!result.ok) {
     item.status = 'failed';
@@ -396,6 +460,7 @@ async function acquireItem(
       truncated: false,
       retrievedAt: iso(clock),
       validated: false,
+      archiveInjection: null,
     };
     return false;
   }
@@ -435,6 +500,7 @@ async function acquireItem(
     truncated: response.truncated,
     retrievedAt: iso(clock),
     validated: invalid === null,
+    archiveInjection: scanForInjection(decoded),
   };
 
   if (invalid !== null) {
@@ -491,8 +557,6 @@ function enqueueDependencies(
         // served timestamp record that. Per-asset nearest-capture resolution
         // is issue #6.
         requestedTimestamp: page.capture.servedTimestamp ?? page.capture.requestedTimestamp,
-        archiveDigest: null,
-        archiveStatus: null,
         at: iso(clock),
       }),
     );
@@ -509,10 +573,30 @@ function newItem(input: {
   relation: LinkRelation | 'page';
   discoveredFrom: string | null;
   requestedTimestamp: string | null;
-  archiveDigest: string | null;
-  archiveStatus: string | null;
+  /**
+   * The inventory row this item came from, with the metadata a selection
+   * policy reads. Null for a seed or a discovered dependency, which the
+   * inventory never described.
+   */
+  candidate?: CaptureCandidate;
   at: string;
 }): WorkItem {
+  const candidates =
+    input.candidate !== undefined
+      ? [input.candidate]
+      : input.requestedTimestamp === null
+        ? []
+        : [
+            {
+              timestamp: input.requestedTimestamp,
+              digest: null,
+              statusCode: null,
+              mimetype: null,
+              length: null,
+              excludedBy: null,
+            },
+          ];
+
   return {
     id: itemId(input.originalUrl),
     originalUrl: input.originalUrl,
@@ -528,15 +612,39 @@ function newItem(input: {
       requestedTimestamp: input.requestedTimestamp,
       servedTimestamp: null,
       distanceSeconds: null,
-      replayModifier: IDENTITY_MODIFIER,
+      replayModifier: replayModifierFor(input.relation),
       alternatives: input.requestedTimestamp === null ? [] : [input.requestedTimestamp],
-      archiveDigest: input.archiveDigest,
-      archiveStatus: input.archiveStatus,
+      candidates,
+      selection: null,
+      archiveDigest: input.candidate?.digest ?? null,
+      archiveStatus: input.candidate?.statusCode ?? null,
     },
     fetch: null,
     encoding: null,
     outcome: null,
     notes: [],
+  };
+}
+
+/**
+ * Run the defensive strip and record what it found.
+ *
+ * The stored bytes stay exactly as they arrived: an injected body is still
+ * evidence of what the provider served, and rewriting the store would destroy
+ * it. The stripped text is a pure function of those bytes and the decoder, so
+ * a later stage recomputes it rather than storing a second copy.
+ */
+function scanForInjection(decoded: DecodeResult): ArchiveInjectionRecord {
+  if (decoded.kind !== 'text' || decoded.text === null) {
+    return { scanned: false, removedNodes: 0, rules: [], removedCharacters: 0, residualMarkers: [] };
+  }
+  const stripped = stripArchiveInjection(decoded.text);
+  return {
+    scanned: true,
+    removedNodes: stripped.removals.length,
+    rules: [...new Set(stripped.removals.map((removal) => removal.rule))],
+    removedCharacters: stripped.removals.reduce((total, removal) => total + removal.characters, 0),
+    residualMarkers: stripped.residual,
   };
 }
 

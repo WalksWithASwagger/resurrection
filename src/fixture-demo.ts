@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 import { main } from './cli.ts';
 import { loadProjectConfig } from './config.ts';
-import { loadJob } from './job.ts';
+import { readJobProjectId } from './job.ts';
 
 export const DEMO_CONFIG_PATH = fileURLToPath(new URL('../fixtures/demo-site/project.json', import.meta.url));
 export const DEMO_MANIFEST_PATH = fileURLToPath(new URL('../fixtures/demo-site/manifest.json', import.meta.url));
@@ -27,13 +27,16 @@ export const DEMO_OUTPUT_DIRECTORY = 'tmp/demo-acquisition';
 
 /** Remove a previous demo run's output, and nothing else. */
 export async function clearDemoOutput(directory: string): Promise<void> {
-  const existing = await loadJob(directory);
-  if (existing === null) return;
+  // Read the owning project without validating the job's version: a directory
+  // left by an older build is still the demo's to clear, and refusing to read
+  // it would make this command depend on prior working-tree state.
+  const owner = await readJobProjectId(directory);
+  if (owner === null) return;
 
   const config = await loadProjectConfig(DEMO_CONFIG_PATH);
-  if (existing.projectId !== config.projectId) {
+  if (owner !== config.projectId) {
     throw new Error(
-      `${directory} holds a job for project ${existing.projectId}, not the ${config.projectId} demo; ` +
+      `${directory} holds a job for project ${owner}, not the ${config.projectId} demo; ` +
         'move it aside rather than asking the demo to delete acquired evidence',
     );
   }

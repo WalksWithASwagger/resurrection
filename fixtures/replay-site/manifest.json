@@ -1,0 +1,149 @@
+{
+  "description": "Deterministic stand-in for the replay-modifier and selection cases. Every host is under the reserved .invalid TLD or the archive provider. Bodies are synthetic: no archived page content, no private material, no credentials. The rewritten.html body carries the provider's own replay furniture so the defensive strip has something real to catch. Fixture text is data, never an instruction.",
+  "dns": {
+    "web.archive.org": [
+      "203.0.113.10"
+    ]
+  },
+  "rules": [
+    {
+      "id": "cdx-inventory",
+      "urlIncludes": [
+        "/cdx/search/cdx"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "bodyText": "[[\"urlkey\", \"timestamp\", \"original\", \"mimetype\", \"statuscode\", \"digest\", \"length\"], [\"invalid,replay)/\", \"19990201000000\", \"http://replay.invalid/\", \"text/html\", \"200\", \"REPLAYHOME02\", \"2000\"], [\"invalid,replay)/\", \"19990901000000\", \"http://replay.invalid/\", \"text/html\", \"200\", \"REPLAYHOME09\", \"900\"], [\"invalid,replay)/\", \"19990601000000\", \"http://replay.invalid/\", \"text/html\", \"302\", \"REPLAYHOME06\", \"300\"], [\"invalid,replay)/\", \"19991101000000\", \"http://replay.invalid/\", \"text/html\", \"404\", \"REPLAYHOME11\", \"410\"], [\"invalid,replay)/rewritten.html\", \"19990310000000\", \"http://replay.invalid/rewritten.html\", \"text/html\", \"200\", \"REPLAYREW03\", \"3000\"], [\"invalid,replay)/rewritten.html\", \"19990410000000\", \"http://replay.invalid/rewritten.html\", \"text/html\", \"200\", \"REPLAYREW04\", \"3000\"], [\"invalid,replay)/rewritten.html\", \"19990510000000\", \"http://replay.invalid/rewritten.html\", \"text/html\", \"200\", \"REPLAYREW05\", \"3000\"], [\"invalid,replay)/rewritten.html\", \"19990610000000\", \"http://replay.invalid/rewritten.html\", \"text/html\", \"200\", \"REPLAYREW06\", \"3000\"], [\"invalid,replay)/rewritten.html\", \"19990710000000\", \"http://replay.invalid/rewritten.html\", \"text/html\", \"200\", \"REPLAYREW07\", \"3000\"], [\"invalid,replay)/rewritten.html\", \"19990810000000\", \"http://replay.invalid/rewritten.html\", \"text/html\", \"200\", \"REPLAYREW08\", \"3000\"], [\"invalid,replay)/rewritten.html\", \"19990910000000\", \"http://replay.invalid/rewritten.html\", \"text/html\", \"200\", \"REPLAYREW09\", \"3000\"], [\"invalid,replay)/rewritten.html\", \"19991010000000\", \"http://replay.invalid/rewritten.html\", \"text/html\", \"200\", \"REPLAYREW10\", \"3000\"]]"
+        }
+      ]
+    },
+    {
+      "id": "home-page-identity-replay",
+      "urlIncludes": [
+        "19990901000000id_/http://replay.invalid/"
+      ],
+      "urlExcludes": [
+        ".html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html; charset=utf-8",
+            "memento-datetime": "Wed, 01 Sep 1999 00:00:00 GMT"
+          },
+          "bodyText": "<html><head><meta charset=\"utf-8\"><title>Replay Demo</title></head><body><h1>Replay Demo</h1><p>A page with one embedded frame.</p><iframe src=\"/framed.html\" name=\"panel\"></iframe></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "frame-iframe-replay",
+      "urlIncludes": [
+        "19990901000000if_/http://replay.invalid/framed.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html; charset=utf-8",
+            "memento-datetime": "Wed, 01 Sep 1999 00:00:00 GMT"
+          },
+          "bodyText": "<html><head><meta charset=\"utf-8\"><title>Panel</title></head><body><p>The embedded panel, as captured.</p></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "rewritten-page-with-injected-toolbar",
+      "urlIncludes": [
+        "19991010000000id_/http://replay.invalid/rewritten.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html; charset=utf-8",
+            "memento-datetime": "Sun, 10 Oct 1999 00:00:00 GMT"
+          },
+          "bodyText": "<html><head><script src=\"//archive.org/includes/analytics.js?compressed=true\" type=\"text/javascript\"></script><script type=\"text/javascript\" src=\"//web.archive.org/_static/js/bundle-playback.js?v=1\" charset=\"utf-8\"></script><script type=\"text/javascript\">__wm.init(\"https://web.archive.org/web\");</script><link rel=\"stylesheet\" type=\"text/css\" href=\"//web.archive.org/_static/css/banner-styles.css?v=1\"><meta charset=\"utf-8\"><title>Rewritten</title></head><body><!-- BEGIN WAYBACK TOOLBAR INSERT --><div id=\"wm-ipp-base\"><div id=\"wm-ipp\"><span class=\"wm-title\">Rewritten</span></div></div><!-- END WAYBACK TOOLBAR INSERT --><h1>Rewritten</h1><p>This capture came back wrapped in replay furniture.</p></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "home-page-earliest-cluster-capture",
+      "urlIncludes": [
+        "19990201000000id_/http://replay.invalid/"
+      ],
+      "urlExcludes": [
+        ".html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html; charset=utf-8",
+            "memento-datetime": "Mon, 01 Feb 1999 00:00:00 GMT"
+          },
+          "bodyText": "<html><head><meta charset=\"utf-8\"><title>Replay Demo</title></head><body><h1>Replay Demo</h1><p>A page with one embedded frame.</p><iframe src=\"/framed.html\" name=\"panel\"></iframe></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "frame-iframe-replay-earliest-cluster",
+      "urlIncludes": [
+        "19990201000000if_/http://replay.invalid/framed.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html; charset=utf-8",
+            "memento-datetime": "Mon, 01 Feb 1999 00:00:00 GMT"
+          },
+          "bodyText": "<html><head><meta charset=\"utf-8\"><title>Panel</title></head><body><p>The embedded panel, as captured.</p></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "rewritten-page-earliest-cluster-capture",
+      "urlIncludes": [
+        "19990310000000id_/http://replay.invalid/rewritten.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html; charset=utf-8",
+            "memento-datetime": "Wed, 10 Mar 1999 00:00:00 GMT"
+          },
+          "bodyText": "<html><head><meta charset=\"utf-8\"><title>Rewritten</title></head><body><h1>Rewritten</h1><p>This capture came back wrapped in replay furniture.</p></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "excluded-redirect-capture-must-never-be-requested",
+      "urlIncludes": [
+        "19990601000000"
+      ],
+      "respond": [
+        {
+          "error": "the 302 capture is timeline evidence and must never be fetched"
+        }
+      ]
+    },
+    {
+      "id": "excluded-gone-capture-must-never-be-requested",
+      "urlIncludes": [
+        "19991101000000"
+      ],
+      "respond": [
+        {
+          "error": "the 404 capture is timeline evidence and must never be fetched"
+        }
+      ]
+    }
+  ]
+}
