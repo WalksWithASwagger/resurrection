@@ -20,7 +20,7 @@ import type { BudgetSpend, Budgets } from './budget.ts';
 import type { CdxQuery } from './cdx.ts';
 import type { ScopeConfig } from './config.ts';
 import type { LinkRelation } from './discover.ts';
-import type { Failure, UnattemptedReason } from './outcomes.ts';
+import type { Failure, OutcomeRecord, UnattemptedReason } from './outcomes.ts';
 
 export const JOB_FILE = 'job.json';
 export const JOB_STATE_VERSION = 1;
@@ -46,6 +46,12 @@ export interface CaptureRecord {
   alternatives: string[];
   /** The provider's own digest, never mixed with the local body hash. */
   archiveDigest: string | null;
+  /**
+   * The origin's status at crawl time, verbatim from the CDX row. It is the
+   * provider's metadata about the capture, not the status of the replay, and
+   * it is what establishes a site's own error template (src/classify.ts).
+   */
+  archiveStatus: string | null;
 }
 
 export interface FetchRecord {
@@ -101,6 +107,12 @@ export interface WorkItem {
   capture: CaptureRecord;
   fetch: FetchRecord | null;
   encoding: EncodingRecord | null;
+  /**
+   * What this item actually holds, on the content axis. Derived from the
+   * records above by src/classify.ts, never a second status the fetch loop
+   * writes by hand. Null until a classification pass has run.
+   */
+  outcome: OutcomeRecord | null;
   notes: string[];
 }
 
@@ -151,6 +163,14 @@ export function findItem(state: JobState, originalUrl: string): WorkItem | undef
 /** An item that already holds validated bytes is never attempted again. */
 export function isComplete(item: WorkItem): boolean {
   return item.status === 'fetched' && item.fetch?.bodyHash != null && item.fetch.validated;
+}
+
+/**
+ * Validated bytes and recovered content are different claims, and an M2
+ * reference needs both. An unclassified item is never eligible.
+ */
+export function referenceEligible(item: WorkItem): boolean {
+  return isComplete(item) && item.outcome?.referenceEligible === true;
 }
 
 export async function saveJob(directory: string, state: JobState): Promise<void> {

@@ -14,7 +14,8 @@ import { runAcquisition, type ControlSignal } from './acquire.ts';
 import { loadProjectConfig } from './config.ts';
 import { buildEvidenceReport, summarize, writeEvidenceReport } from './evidence.ts';
 import { createFixtureTransport, loadFixtureManifest } from './fixture-transport.ts';
-import { loadJob } from './job.ts';
+import { loadJob, type JobState } from './job.ts';
+import { reclassifyJob } from './reclassify.ts';
 import { systemResolver } from './destination.ts';
 import { createLiveTransport } from './transport.ts';
 
@@ -30,6 +31,10 @@ const USAGE = `resurrection — bounded archive acquisition
 
   report --job <dir>
     Re-render the evidence summary from a job on disk. Makes no requests.
+
+  reclassify --job <dir>
+    Re-run outcome classification over bytes already stored, then re-render
+    the report. Reads the body store, opens no socket, refetches nothing.
 `;
 
 export async function main(argv: readonly string[]): Promise<number> {
@@ -42,6 +47,7 @@ export async function main(argv: readonly string[]): Promise<number> {
   }
   if (command === 'acquire') return await acquireCommand(flags);
   if (command === 'report') return await reportCommand(flags);
+  if (command === 'reclassify') return await reclassifyCommand(flags);
 
   process.stderr.write(`unknown command ${command}\n\n${USAGE}`);
   return 1;
@@ -122,6 +128,42 @@ async function reportCommand(flags: Record<string, string>): Promise<number> {
     process.stderr.write(`no job found in ${directory}\n`);
     return 1;
   }
+  await renderReport(state, directory);
+  return 0;
+}
+
+async function reclassifyCommand(flags: Record<string, string>): Promise<number> {
+  const directory = flags['job'];
+  if (directory === undefined) {
+    process.stderr.write('reclassify requires --job <dir>\n');
+    return 1;
+  }
+  const existing = await loadJob(directory);
+  if (existing === null) {
+    process.stderr.write(`no job found in ${directory}\n`);
+    return 1;
+  }
+
+  const { state, summary } = await reclassifyJob(directory);
+  await renderReport(state, directory);
+  process.stdout.write(
+    `reclassified   ${summary.itemsClassified} items from ${summary.storeReads} stored bodies, ` +
+      `0 requests\n`,
+  );
+  if (summary.templates.length > 0) {
+    process.stdout.write(`templates      ${summary.templates.map((t) => t.id).join(' ')}\n`);
+  }
+  if (summary.missingBodies > 0) {
+    process.stdout.write(`missing bodies ${summary.missingBodies}\n`);
+  }
+  return 0;
+}
+
+/**
+ * Render from job state alone. The provider fields are empty because no
+ * request is made here and a report never carries operator configuration.
+ */
+async function renderReport(state: JobState, directory: string): Promise<void> {
   const report = buildEvidenceReport(state, {
     projectId: state.projectId,
     scope: state.scope,
@@ -138,7 +180,6 @@ async function reportCommand(flags: Record<string, string>): Promise<number> {
   });
   await writeEvidenceReport(directory, report);
   process.stdout.write(`${summarize(report)}\n`);
-  return 0;
 }
 
 function parseFlags(argv: readonly string[]): Record<string, string> {

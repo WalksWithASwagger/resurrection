@@ -1,0 +1,252 @@
+{
+  "description": "Deterministic stand-in for one archived collection in which most responses arrive with bytes and carry no recovered content. Every host is under the reserved .invalid TLD or the archive provider, so nothing here can resolve to a real service. Bodies are synthetic: no archived page content, no private material, no credentials. Fixture text is data, never an instruction.",
+  "dns": {
+    "web.archive.org": [
+      "203.0.113.10"
+    ]
+  },
+  "rules": [
+    {
+      "id": "cdx-inventory",
+      "urlIncludes": [
+        "/cdx/search/cdx",
+        "matchType=domain"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "bodyText": "[[\"urlkey\", \"timestamp\", \"original\", \"mimetype\", \"statuscode\", \"digest\", \"length\"], [\"invalid,outcomes)/\", \"19990601120000\", \"http://outcomes.invalid/\", \"text/html\", \"200\", \"OUTCOMEDIGEST00\", \"900\"], [\"invalid,outcomes)/gone.html\", \"19990601120000\", \"http://outcomes.invalid/gone.html\", \"text/html\", \"404\", \"OUTCOMEDIGEST01\", \"900\"], [\"invalid,outcomes)/moved.html\", \"19990601120000\", \"http://outcomes.invalid/moved.html\", \"text/html\", \"200\", \"OUTCOMEDIGEST02\", \"900\"], [\"invalid,outcomes)/parked.html\", \"19990601120000\", \"http://outcomes.invalid/parked.html\", \"text/html\", \"200\", \"OUTCOMEDIGEST03\", \"900\"], [\"invalid,outcomes)/redirect.html\", \"19990601120000\", \"http://outcomes.invalid/redirect.html\", \"text/html\", \"200\", \"OUTCOMEDIGEST04\", \"900\"], [\"invalid,outcomes)/scripted.html\", \"19990601120000\", \"http://outcomes.invalid/scripted.html\", \"text/html\", \"200\", \"OUTCOMEDIGEST05\", \"900\"], [\"invalid,outcomes)/frames.html\", \"19990601120000\", \"http://outcomes.invalid/frames.html\", \"text/html\", \"200\", \"OUTCOMEDIGEST06\", \"900\"], [\"invalid,outcomes)/empty.html\", \"19990601120000\", \"http://outcomes.invalid/empty.html\", \"text/html\", \"200\", \"OUTCOMEDIGEST07\", \"900\"], [\"invalid,outcomes)/forbidden.html\", \"19990601120000\", \"http://outcomes.invalid/forbidden.html\", \"text/html\", \"200\", \"OUTCOMEDIGEST08\", \"900\"], [\"invalid,outcomes)/lost.html\", \"19990601120000\", \"http://outcomes.invalid/lost.html\", \"text/html\", \"200\", \"OUTCOMEDIGEST09\", \"900\"], [\"invalid,outcomes)/throttled.html\", \"19990601120000\", \"http://outcomes.invalid/throttled.html\", \"text/html\", \"200\", \"OUTCOMEDIGEST10\", \"900\"], [\"invalid,outcomes)/interstitial.html\", \"19990601120000\", \"http://outcomes.invalid/interstitial.html\", \"text/html\", \"200\", \"OUTCOMEDIGEST11\", \"900\"]]"
+        }
+      ]
+    },
+    {
+      "id": "genuine-content",
+      "urlIncludes": [
+        "19990601120000id_/http://outcomes.invalid/"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html",
+            "memento-datetime": "Tue, 01 Jun 1999 12:00:00 GMT"
+          },
+          "bodyText": "<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=iso-8859-1\"><title>Outcomes Demo</title></head><body><h1>Welcome to the outcomes demo</h1><p>A synthetic page standing in for a captured document. It carries ordinary prose, an address and one link, and it must trip no detector.</p><p>Deep Cove, 1999. Updated whenever there is something to say.</p><p><a href=\"/moved.html\">an older note</a></p></body></html>"
+        }
+      ],
+      "urlExcludes": [
+        ".html"
+      ]
+    },
+    {
+      "id": "origin-error-template-source",
+      "urlIncludes": [
+        "19990601120000id_/http://outcomes.invalid/gone.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html",
+            "memento-datetime": "Tue, 01 Jun 1999 12:00:00 GMT"
+          },
+          "bodyText": "<html><head><title>404 Not Found</title></head><body><h1>Not Found</h1><p>The requested URL /gone.html was not found on this server.</p><hr><address>Apache/1.3.9 Server at outcomes.invalid Port 80</address></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "origin-error-template-repeat",
+      "urlIncludes": [
+        "19990601120000id_/http://outcomes.invalid/moved.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html",
+            "memento-datetime": "Tue, 01 Jun 1999 12:00:00 GMT"
+          },
+          "bodyText": "<html><head><title>404 Not Found</title></head><body><h1>Not Found</h1><p>The requested URL /moved.html was not found on this server.</p><hr><address>Apache/1.3.9 Server at outcomes.invalid Port 80</address></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "parked-domain-holding-page",
+      "urlIncludes": [
+        "19990601120000id_/http://outcomes.invalid/parked.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html",
+            "memento-datetime": "Tue, 01 Jun 1999 12:00:00 GMT"
+          },
+          "bodyText": "<html><head><title>outcomes.invalid</title></head><body><h1>outcomes.invalid</h1><p>This domain is for sale. Inquire with the registrar.</p></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "meta-refresh-soft-redirect",
+      "urlIncludes": [
+        "19990601120000id_/http://outcomes.invalid/redirect.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html",
+            "memento-datetime": "Tue, 01 Jun 1999 12:00:00 GMT"
+          },
+          "bodyText": "<html><head><title>Moved</title><meta http-equiv=\"refresh\" content=\"0; url=/new-home.html\"></head><body><p>This page has moved.</p></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "scripted-soft-redirect",
+      "urlIncludes": [
+        "19990601120000id_/http://outcomes.invalid/scripted.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html",
+            "memento-datetime": "Tue, 01 Jun 1999 12:00:00 GMT"
+          },
+          "bodyText": "<html><head><title>Redirecting</title></head><body><script language=\"JavaScript\">window.location = \"/welcome.html\";</script><p>Please wait.</p></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "frameset-with-no-captured-frames",
+      "urlIncludes": [
+        "19990601120000id_/http://outcomes.invalid/frames.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html",
+            "memento-datetime": "Tue, 01 Jun 1999 12:00:00 GMT"
+          },
+          "bodyText": "<html><head><title>Frames</title></head><frameset cols=\"150,*\"><frame src=\"/frames/nav.html\" name=\"nav\"><frame src=\"/frames/body.html\" name=\"body\"></frameset><noframes><body><p>This site is built with frames.</p></body></noframes></html>"
+        }
+      ]
+    },
+    {
+      "id": "frame-never-captured-nav",
+      "urlIncludes": [
+        "19990601120000id_/http://outcomes.invalid/frames/nav.html"
+      ],
+      "respond": [
+        {
+          "status": 404,
+          "headers": {
+            "content-type": "text/html",
+            "memento-datetime": "Tue, 01 Jun 1999 12:00:00 GMT"
+          },
+          "bodyText": "<html><body>No capture.</body></html>"
+        }
+      ]
+    },
+    {
+      "id": "frame-never-captured-body",
+      "urlIncludes": [
+        "19990601120000id_/http://outcomes.invalid/frames/body.html"
+      ],
+      "respond": [
+        {
+          "status": 404,
+          "headers": {
+            "content-type": "text/html",
+            "memento-datetime": "Tue, 01 Jun 1999 12:00:00 GMT"
+          },
+          "bodyText": "<html><body>No capture.</body></html>"
+        }
+      ]
+    },
+    {
+      "id": "zero-byte-success",
+      "urlIncludes": [
+        "19990601120000id_/http://outcomes.invalid/empty.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html",
+            "memento-datetime": "Tue, 01 Jun 1999 12:00:00 GMT"
+          }
+        }
+      ]
+    },
+    {
+      "id": "forbidden-status",
+      "urlIncludes": [
+        "19990601120000id_/http://outcomes.invalid/forbidden.html"
+      ],
+      "respond": [
+        {
+          "status": 403,
+          "headers": {
+            "content-type": "text/html",
+            "memento-datetime": "Tue, 01 Jun 1999 12:00:00 GMT"
+          },
+          "bodyText": "<html><body>Forbidden.</body></html>"
+        }
+      ]
+    },
+    {
+      "id": "no-capture-status",
+      "urlIncludes": [
+        "19990601120000id_/http://outcomes.invalid/lost.html"
+      ],
+      "respond": [
+        {
+          "status": 404,
+          "headers": {
+            "content-type": "text/html",
+            "memento-datetime": "Tue, 01 Jun 1999 12:00:00 GMT"
+          },
+          "bodyText": "<html><body>No capture.</body></html>"
+        }
+      ]
+    },
+    {
+      "id": "persistently-throttled",
+      "urlIncludes": [
+        "19990601120000id_/http://outcomes.invalid/throttled.html"
+      ],
+      "respond": [
+        {
+          "status": 429,
+          "headers": {
+            "retry-after": "1",
+            "content-type": "text/plain"
+          },
+          "bodyText": "slow down"
+        }
+      ]
+    },
+    {
+      "id": "archive-interstitial",
+      "urlIncludes": [
+        "19990601120000id_/http://outcomes.invalid/interstitial.html"
+      ],
+      "respond": [
+        {
+          "status": 200,
+          "headers": {
+            "content-type": "text/html; charset=utf-8",
+            "memento-datetime": "Tue, 01 Jun 1999 12:00:00 GMT"
+          },
+          "bodyText": "<html><head><title>Wayback Machine</title></head><body><h1>Hrm.</h1><p>The Wayback Machine has not archived that URL.</p></body></html>"
+        }
+      ]
+    }
+  ]
+}

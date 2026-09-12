@@ -118,3 +118,8 @@ Transliteration, ASCII folding, language detection and historical markup
 normalization. Per-item gap reporting and the evidence report itself belong to
 the acquisition package, which now records these fields per fetched body; see
 [bounded acquisition](ACQUISITION.md).
+
+Deciding what decoded text *is* — a capture, an interstitial, an error
+template — belongs to [outcomes](OUTCOMES.md). That classifier reads the text
+this module produces and never decodes bytes itself, which is also what makes
+re-decoding and reclassifying a stored collection cost no requests.

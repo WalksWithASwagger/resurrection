@@ -116,3 +116,38 @@ test('report refuses a directory that holds no job', async () => {
     assert.match(result.stderr, /no job found/u);
   });
 });
+
+test('reclassify re-runs classification over stored bytes and reports zero requests', async () => {
+  await withTempDirectory(async (directory) => {
+    await cli([
+      'acquire',
+      '--config',
+      PROJECT_PATH,
+      '--transport',
+      'fixture',
+      '--fixture-manifest',
+      MANIFEST_PATH,
+      '--output',
+      directory,
+    ]);
+
+    const first = await cli(['reclassify', '--job', directory]);
+    const second = await cli(['reclassify', '--job', directory]);
+
+    assert.equal(first.code, 0);
+    assert.match(first.stdout, /reclassified\s+10 items from 8 stored bodies, 0 requests/u);
+    assert.match(first.stdout, /eligible\s+7 of those may become an M2 reference/u);
+    // The command is in the contract's verification list, so running it twice
+    // in one working tree has to leave the same result (issue #13).
+    assert.equal(second.stdout, first.stdout);
+  });
+});
+
+test('reclassify refuses a directory that holds no job', async () => {
+  await withTempDirectory(async (directory) => {
+    const result = await cli(['reclassify', '--job', directory]);
+
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /no job found/u);
+  });
+});

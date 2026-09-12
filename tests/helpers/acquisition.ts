@@ -22,9 +22,14 @@ import {
 } from '../../src/fixture-transport.ts';
 
 const FIXTURE_ROOT = fileURLToPath(new URL('../../fixtures/demo-site/', import.meta.url));
+const OUTCOME_ROOT = fileURLToPath(new URL('../../fixtures/outcome-site/', import.meta.url));
 
 export const MANIFEST_PATH = join(FIXTURE_ROOT, 'manifest.json');
 export const PROJECT_PATH = join(FIXTURE_ROOT, 'project.json');
+
+/** The mixed collection behind the outcome suite: mostly bytes, little content. */
+export const OUTCOME_MANIFEST_PATH = join(OUTCOME_ROOT, 'manifest.json');
+export const OUTCOME_PROJECT_PATH = join(OUTCOME_ROOT, 'project.json');
 
 /** A fixed start time, so every ISO timestamp in a report is deterministic. */
 export const FIXTURE_EPOCH = Date.parse('2026-01-01T00:00:00.000Z');
@@ -57,6 +62,19 @@ export async function harness(directory: string, manifest?: FixtureManifest): Pr
   return {
     config: await demoConfig(directory),
     handle: createFixtureTransport(manifest ?? (await demoManifest())),
+    clock: createTestClock(FIXTURE_EPOCH),
+  };
+}
+
+export async function outcomeManifest(): Promise<FixtureManifest> {
+  return await loadFixtureManifest(OUTCOME_MANIFEST_PATH);
+}
+
+export async function outcomeHarness(directory: string, manifest?: FixtureManifest): Promise<Harness> {
+  const config = await loadProjectConfig(OUTCOME_PROJECT_PATH);
+  return {
+    config: { ...config, outputDirectory: directory },
+    handle: createFixtureTransport(manifest ?? (await outcomeManifest())),
     clock: createTestClock(FIXTURE_EPOCH),
   };
 }
