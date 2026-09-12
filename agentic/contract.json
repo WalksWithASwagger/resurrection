@@ -51,9 +51,10 @@
       "python3 -m json.tool benchmarks/pilots.json",
       "pnpm test",
       "pnpm run typecheck",
-      "pnpm run acquire:fixture"
+      "pnpm run acquire:fixture",
+      "pnpm run reclassify:fixture"
     ],
-    "note": "A pull request that introduces or changes an executable command must add it here in the same pull request, so this list never describes verification the repository cannot perform. The package skeleton and its test command landed with the decode step (#4); the M1 acquisition package extends them rather than creating a second package. Every command listed here runs against local fixtures and opens no socket: acquire:fixture replays fixtures/demo-site/manifest.json. A live provider call needs the CLI's explicit --transport live --confirm-live-acquisition and is never part of this list."
+    "note": "A pull request that introduces or changes an executable command must add it here in the same pull request, so this list never describes verification the repository cannot perform. The package skeleton and its test command landed with the decode step (#4); the M1 acquisition package extends them rather than creating a second package. Every command listed here runs against local fixtures and opens no socket: acquire:fixture replays fixtures/demo-site/manifest.json, and reclassify:fixture re-runs outcome classification over the bytes that run already stored, which is why it follows acquire:fixture in this list and why running the list twice in a row is idempotent. A live provider call needs the CLI's explicit --transport live --confirm-live-acquisition and is never part of this list."
   },
   "issue_quality": {
     "required_sections": [

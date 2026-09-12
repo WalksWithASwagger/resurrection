@@ -21,11 +21,18 @@ import { join } from 'node:path';
 
 import type { BudgetSpend, Budgets } from './budget.ts';
 import type { ProjectConfig } from './config.ts';
-import { isComplete, type EncodingRecord, type JobState, type RedirectHop, type WorkItem } from './job.ts';
-import type { Failure, UnattemptedReason } from './outcomes.ts';
+import {
+  isComplete,
+  referenceEligible,
+  type EncodingRecord,
+  type JobState,
+  type RedirectHop,
+  type WorkItem,
+} from './job.ts';
+import { zeroOutcomeCounts, type Failure, type ItemOutcome, type OutcomeRecord, type UnattemptedReason } from './outcomes.ts';
 
 export const EVIDENCE_FILE = 'evidence.json';
-export const EVIDENCE_SCHEMA_VERSION = 1;
+export const EVIDENCE_SCHEMA_VERSION = 2;
 
 export interface IndexedEntry {
   originalUrl: string;
@@ -56,6 +63,7 @@ export interface FetchedEntry {
   storePath: string | null;
   contentType: string | null;
   encoding: EncodingRecord | null;
+  outcome: OutcomeRecord | null;
 }
 
 export interface FailedEntry {
@@ -67,6 +75,7 @@ export interface FailedEntry {
   redirectChain: RedirectHop[];
   /** Bytes may have arrived and been retained even though nothing validated. */
   bodyHash: string | null;
+  outcome: OutcomeRecord | null;
 }
 
 export interface UnattemptedEntry {
@@ -76,6 +85,7 @@ export interface UnattemptedEntry {
   reason: UnattemptedReason;
   discoveredFrom: string | null;
   notes: string[];
+  outcome: OutcomeRecord | null;
 }
 
 export interface RecoveredFile {
@@ -86,10 +96,18 @@ export interface RecoveredFile {
   storePath: string;
   contentType: string | null;
   servedTimestamp: string | null;
+  /**
+   * Validated bytes are not by themselves recovered content. Only an `ok`
+   * outcome may become an M2 reference; everything else stays here as
+   * evidence of what the provider served.
+   */
+  outcome: ItemOutcome | null;
+  referenceEligible: boolean;
 }
 
 export type GapKind =
   | 'failed-fetch'
+  | 'non-content-body'
   | 'unattempted'
   | 'no-capture'
   | 'degraded-encoding'
@@ -125,6 +143,10 @@ export interface EvidenceReport {
     unattempted: number;
     skipped: number;
     recoveredFiles: number;
+    /** The subset of recoveredFiles an M2 reference may be frozen from. */
+    referenceEligible: number;
+    /** Every outcome in the closed set, zero-filled. Sums to `items`. */
+    byOutcome: Record<ItemOutcome, number>;
   };
   indexed: IndexedEntry[];
   fetched: FetchedEntry[];
@@ -154,7 +176,9 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
   const unattempted: UnattemptedEntry[] = [];
   const recoveredFiles: RecoveredFile[] = [];
   const gaps: GapEntry[] = [];
+  const byOutcome = zeroOutcomeCounts();
   let skipped = 0;
+  let eligible = 0;
 
   for (const item of state.items) {
     if (item.status === 'fetched' && item.fetch !== null) {
@@ -176,10 +200,15 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
         storePath: item.fetch.storePath,
         contentType: item.fetch.contentType,
         encoding: item.encoding,
+        outcome: item.outcome,
       });
     }
 
+    if (item.outcome !== null) byOutcome[item.outcome.outcome] += 1;
+
     if (isComplete(item) && item.fetch?.bodyHash != null && item.fetch.storePath != null) {
+      const eligibleHere = referenceEligible(item);
+      if (eligibleHere) eligible += 1;
       recoveredFiles.push({
         originalUrl: item.originalUrl,
         localPath: item.localPath,
@@ -188,7 +217,23 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
         storePath: item.fetch.storePath,
         contentType: item.fetch.contentType,
         servedTimestamp: item.capture.servedTimestamp,
+        outcome: item.outcome?.outcome ?? null,
+        referenceEligible: eligibleHere,
       });
+
+      // Validated bytes that are not content are the silent failure issue #5
+      // exists to stop. They stay stored and named, and they are named here so
+      // the gap report is where a reviewer sees them.
+      if (!eligibleHere) {
+        gaps.push({
+          kind: 'non-content-body',
+          originalUrl: item.originalUrl,
+          detail: `${item.outcome?.outcome ?? 'unclassified'}: ${
+            item.outcome?.detail ?? 'no classification pass has run'
+          }`,
+          remedy: 'select an alternative capture; this body must not become a reference',
+        });
+      }
     }
 
     if (item.status === 'failed' && item.failure !== null) {
@@ -200,6 +245,7 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
         attempts: item.fetch?.attempts ?? 0,
         redirectChain: item.fetch?.redirectChain ?? [],
         bodyHash: item.fetch?.bodyHash ?? null,
+        outcome: item.outcome,
       });
       gaps.push({
         kind: 'failed-fetch',
@@ -220,6 +266,7 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
         reason,
         discoveredFrom: item.discoveredFrom,
         notes: item.notes,
+        outcome: item.outcome,
       });
       gaps.push({
         kind: 'unattempted',
@@ -299,6 +346,8 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
       unattempted: unattempted.length,
       skipped,
       recoveredFiles: recoveredFiles.length,
+      referenceEligible: eligible,
+      byOutcome,
     },
     indexed,
     fetched,
@@ -328,11 +377,20 @@ export function summarize(report: EvidenceReport): string {
     `unattempted    ${counts.unattempted}`,
     `skipped        ${counts.skipped}`,
     `recovered      ${counts.recoveredFiles} files with validated bytes`,
+    `eligible       ${counts.referenceEligible} of those may become an M2 reference`,
+    `outcomes       ${outcomeLine(counts.byOutcome)}`,
     `gaps           ${report.gaps.length}`,
     `spend          ${spend.requests} requests (${spend.indexRequests} index), ${spend.bytes} bytes, ${spend.elapsedMs}ms`,
     `inventory      ${report.inventory.partial ? 'partial' : 'complete'}`,
   ];
   return lines.join('\n');
+}
+
+/** Non-zero outcome counts only, so the summary stays one screen. */
+function outcomeLine(byOutcome: Record<ItemOutcome, number>): string {
+  const present = Object.entries(byOutcome).filter(([, count]) => count > 0);
+  if (present.length === 0) return 'none classified';
+  return present.map(([outcome, count]) => `${outcome}=${String(count)}`).join(' ');
 }
 
 export function itemsByStatus(state: JobState): Record<string, WorkItem[]> {

@@ -80,9 +80,10 @@ export function servedTimestamp(headers: Readonly<Record<string, string>>, final
 /**
  * Markers of a provider error document served with status 200.
  *
- * The list is short and literal on purpose. Generalising this into an outcome
- * classifier is issue #5; this is the narrow check M1 needs so a "Hrm." page
- * never becomes a recovered file.
+ * The list is short and literal on purpose: these are the provider's own
+ * markers, not an inference from page prose. It is the single source for
+ * interstitial detection, used both by validation here and by the content
+ * classifier in src/classify.ts, so there is one list to keep honest.
  */
 const ARCHIVE_ERROR_MARKERS: readonly string[] = [
   'Wayback Machine has not archived that URL',

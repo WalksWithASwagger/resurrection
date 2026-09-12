@@ -105,6 +105,12 @@ path mapping are none of them a recovered file. That is the invariant behind
 "an asset URL is never reported as a recovered file without acquired and
 validated bytes".
 
+Validated bytes are still not the same thing as recovered content. Every item
+also carries exactly one typed outcome, and only an `ok` outcome is eligible to
+become an M2 reference: see [outcomes](OUTCOMES.md). The report counts items by
+outcome, names the eligible subset, and raises a `non-content-body` gap for
+every validated body that is not content.
+
 Per fetched item the report records the requested capture time, the capture
 time the provider actually served, the distance between them, the redirect
 chain, the replay modifier, the attempt count, the local SHA-256 and the
@@ -118,9 +124,10 @@ credentials and no private collection URLs.
 ### Gaps
 
 The gap report names, with a remedy for each: failed fetches, unattempted
-items, URLs with no known capture, bodies whose replacement-character ratio
-exceeded the documented threshold (`degraded`), truncated bodies, and captures
-served far outside the requested era.
+items, URLs with no known capture, validated bodies that carry no content
+(`non-content-body`), bodies whose replacement-character ratio exceeded the
+documented threshold (`degraded`), truncated bodies, and captures served far
+outside the requested era.
 
 ## Typed failure states
 
@@ -134,6 +141,10 @@ A 4xx is a definite answer and is not retried. A 429 or 503 is retried after
 its `Retry-After`, and a 5xx after a backoff, both within the per-item attempt
 budget. `archive-error-page` is what catches a provider error document served
 with status 200.
+
+This set answers whether a request produced usable bytes. Whether the bytes are
+content is a separate closed set on a separate axis, with a documented mapping
+from every kind above: see [outcomes](OUTCOMES.md).
 
 ## Pause, cancel, resume
 
@@ -178,6 +189,13 @@ Re-render a report from a job already on disk, which makes no requests:
 node src/cli.ts report --job tmp/demo-acquisition
 ```
 
+Re-run outcome classification over bytes already stored, which also makes no
+requests:
+
+```
+pnpm run reclassify:fixture
+```
+
 ## The live acquisition gate
 
 The transport is an explicit argument with no default, and a live run needs a
@@ -205,8 +223,6 @@ which stays a partial result rather than being replaced with synthetic success
 - Capture selection policy and CDX query hardening (issue #7). The adapter
   issues one declared query shape and keeps every alternative timestamp it saw;
   it does not yet choose between them by policy.
-- A general outcome classifier (issue #5). The validation checks above are the
-  narrow set M1 needs.
 - Per-asset nearest-capture resolution (issue #6). A dependency is currently
   requested at its referring page's capture time, and the redirect chain plus
   the served timestamp record what the provider actually returned.

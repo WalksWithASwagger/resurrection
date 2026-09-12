@@ -50,6 +50,16 @@ test('the destination guard uses a networking module only to classify addresses'
   assert.doesNotMatch(source, /\bfetch\s*\(/u);
 });
 
+test('classification and reclassification cannot refetch, because neither holds a transport', async () => {
+  // Issue #5 requires that reclassifying an existing collection costs zero
+  // refetches. A counter can show that a given run made none; this shows the
+  // pass has nothing to make one with.
+  for (const name of ['classify.ts', 'reclassify.ts']) {
+    const source = await readFile(join(SRC, name), 'utf8');
+    assert.doesNotMatch(source, /\bHttpTransport\b|\bfetchResource\b|\bcreateLiveTransport\b/u, `${name} must not fetch`);
+  }
+});
+
 test('no test constructs the live transport or the system resolver', async () => {
   for (const path of await sourceFiles(TESTS)) {
     if (path.endsWith('isolation.test.ts')) continue;

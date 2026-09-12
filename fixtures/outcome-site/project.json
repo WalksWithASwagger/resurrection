@@ -1,0 +1,41 @@
+{
+  "projectId": "outcome-site",
+  "scope": {
+    "url": "outcomes.invalid",
+    "matchType": "domain",
+    "from": "1999",
+    "to": "1999",
+    "seedUrls": [],
+    "dependencyHosts": [
+      "outcomes.invalid"
+    ]
+  },
+  "budgets": {
+    "maxRequests": 60,
+    "maxIndexRequests": 5,
+    "maxTotalBytes": 1048576,
+    "maxResponseBytes": 262144,
+    "maxElapsedMs": 60000,
+    "maxRedirects": 3,
+    "maxAttemptsPerItem": 3,
+    "maxPages": 20,
+    "maxDependencies": 10
+  },
+  "provider": {
+    "cdxEndpoint": "https://web.archive.org/cdx/search/cdx",
+    "replayEndpoint": "https://web.archive.org/web",
+    "allowedHosts": [
+      "web.archive.org"
+    ],
+    "minRequestIntervalMs": 1,
+    "requestTimeoutMs": 30000
+  },
+  "discovery": {
+    "followRelations": [
+      "frame"
+    ],
+    "followPageLinks": false
+  },
+  "outputDirectory": "tmp/outcome-acquisition",
+  "description": "Fixture project for the outcome taxonomy. Frames are followed so a frameset can be proved empty against what was actually captured; page links are not, so every page item comes from the inventory and the collection stays legible."
+}

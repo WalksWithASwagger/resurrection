@@ -36,6 +36,7 @@ import {
   type WorkItem,
 } from './job.ts';
 import { RateLimiter } from './ratelimit.ts';
+import { classifyCollection } from './reclassify.ts';
 import { BodyStore } from './store.ts';
 import type { HttpTransport } from './transport.ts';
 import { validateBody } from './validate.ts';
@@ -141,6 +142,12 @@ export async function runAcquisition(options: AcquisitionOptions): Promise<Acqui
     }
     await saveJob(directory, state);
   }
+
+  // Classification is a collection-wide pass over bytes already stored, so it
+  // runs once the fetch loop is over and costs no requests. The same pass is
+  // what `reclassify` re-runs later.
+  await classifyCollection(state, store);
+  await saveJob(directory, state);
 
   const report = buildEvidenceReport(state, config);
   const reportPath = await writeEvidenceReport(directory, report);
@@ -264,6 +271,7 @@ function recordInventoryRows(state: JobState, config: ProjectConfig, rows: CdxRo
       ) {
         existing.capture.requestedTimestamp = row.timestamp;
         existing.capture.archiveDigest = row.digest === '' ? null : row.digest;
+        existing.capture.archiveStatus = row.statusCode === '' ? null : row.statusCode;
       }
       continue;
     }
@@ -276,6 +284,7 @@ function recordInventoryRows(state: JobState, config: ProjectConfig, rows: CdxRo
         discoveredFrom: null,
         requestedTimestamp: row.timestamp,
         archiveDigest: row.digest === '' ? null : row.digest,
+        archiveStatus: row.statusCode === '' ? null : row.statusCode,
         at: iso(clock),
       }),
     );
@@ -294,6 +303,7 @@ function seedPageItems(state: JobState, config: ProjectConfig, clock: Clock): vo
         discoveredFrom: 'configuration seedUrls',
         requestedTimestamp: config.scope.to ?? config.scope.from,
         archiveDigest: null,
+        archiveStatus: null,
         at: iso(clock),
       }),
     );
@@ -482,6 +492,7 @@ function enqueueDependencies(
         // is issue #6.
         requestedTimestamp: page.capture.servedTimestamp ?? page.capture.requestedTimestamp,
         archiveDigest: null,
+        archiveStatus: null,
         at: iso(clock),
       }),
     );
@@ -499,6 +510,7 @@ function newItem(input: {
   discoveredFrom: string | null;
   requestedTimestamp: string | null;
   archiveDigest: string | null;
+  archiveStatus: string | null;
   at: string;
 }): WorkItem {
   return {
@@ -519,9 +531,11 @@ function newItem(input: {
       replayModifier: IDENTITY_MODIFIER,
       alternatives: input.requestedTimestamp === null ? [] : [input.requestedTimestamp],
       archiveDigest: input.archiveDigest,
+      archiveStatus: input.archiveStatus,
     },
     fetch: null,
     encoding: null,
+    outcome: null,
     notes: [],
   };
 }

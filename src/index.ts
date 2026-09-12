@@ -60,7 +60,16 @@ export type { FetchContext, FetchResult, RequestKind } from './fetch-resource.ts
 export { createFixtureTransport, loadFixtureManifest } from './fixture-transport.ts';
 export type { FixtureManifest, FixtureRule, FixtureTransportHandle } from './fixture-transport.ts';
 
-export { findItem, isComplete, itemId, loadJob, saveJob, JOB_FILE, JOB_STATE_VERSION } from './job.ts';
+export {
+  findItem,
+  isComplete,
+  itemId,
+  loadJob,
+  referenceEligible,
+  saveJob,
+  JOB_FILE,
+  JOB_STATE_VERSION,
+} from './job.ts';
 export type {
   CaptureRecord,
   EncodingRecord,
@@ -71,8 +80,44 @@ export type {
   WorkItem,
 } from './job.ts';
 
-export { failure } from './outcomes.ts';
-export type { Failure, FailureKind, UnattemptedReason } from './outcomes.ts';
+export {
+  failure,
+  outcomeForFailure,
+  outcomeRecord,
+  zeroOutcomeCounts,
+  ITEM_OUTCOMES,
+  OUTCOME_BY_FAILURE_KIND,
+} from './outcomes.ts';
+export type {
+  Failure,
+  FailureKind,
+  ItemOutcome,
+  OutcomeRecord,
+  OutcomeSource,
+  UnattemptedReason,
+} from './outcomes.ts';
+
+export {
+  buildErrorTemplateIndex,
+  classifyItem,
+  errorTemplateFingerprint,
+  frameTargets,
+  parkedDomainMarker,
+  redirectTarget,
+  softNotFoundMarker,
+  EMPTY_TEMPLATE_INDEX,
+} from './classify.ts';
+export type {
+  ClassificationContext,
+  ClassifyInput,
+  ErrorTemplate,
+  ErrorTemplateIndex,
+  RedirectTarget,
+  TemplateObservation,
+} from './classify.ts';
+
+export { classifyCollection, reclassifyJob } from './reclassify.ts';
+export type { ClassificationSummary, ReclassifyResult } from './reclassify.ts';
 
 export { parseRetryAfter, RateLimiter } from './ratelimit.ts';
 

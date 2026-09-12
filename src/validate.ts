@@ -6,8 +6,11 @@
  * answered with an HTML page. Bytes that fail here are recorded as a failure
  * with a reason; they never become a recovered file.
  *
- * Issue #5 turns this into a full outcome taxonomy. The checks below are the
- * narrow set M1 needs, deliberately not a general classifier.
+ * This is the fetch axis only: whether usable bytes arrived. Whether those
+ * bytes are content is decided afterwards by src/classify.ts, over the whole
+ * collection. Keep the two apart: a check here makes an item a failure the
+ * resume logic may retry, which is not what "this page is a 404 template"
+ * means.
  */
 
 import type { DecodeResult } from './decode.ts';
