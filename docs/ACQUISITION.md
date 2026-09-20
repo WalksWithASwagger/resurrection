@@ -44,6 +44,7 @@ are never merged into one success number.
 | `discovery` | Which link relations are followed. |
 | `selection` | Which capture is chosen when the inventory offers several. |
 | `assetResolution.windowDays` | How far a dependency's capture may sit from its referring page before it is flagged. |
+| `assetResolution.maxLookupPages` | How many CDX pages one per-URL asset lookup may retrieve (default 10). Each page is 100 rows. |
 | `candidateFilters` | CDX filter expressions a capture must satisfy to be acquirable. |
 
 There are no site-specific branches anywhere in the engine; a second pilot is a
@@ -199,9 +200,16 @@ silence treated as proof that a URL has no captures, and then no request is
 made at all. Each URL is looked up at most once: the result is recorded in the
 capture index even when it is empty, so several pages referencing one asset
 cause one lookup, and a resumed run re-issues none of them. Every lookup is
-charged to the same index and request budgets as the inventory, and a lookup a
-budget stops leaves the asset **unattempted** with the reason
-`budget-exhausted` — a partial report, not a failure.
+charged to the same index and request budgets as the inventory. A lookup that
+fills its 100-row page follows the provider's `resumeKey` for further pages,
+up to `assetResolution.maxLookupPages` (default 10), so a frequently-crawled
+shared resource is not resolved against only its first 100 captures. Each
+page is a separate index request. A lookup that reaches that cap still
+records `limitReached: true`, now meaning it was capped after N pages rather
+than after one. A budget that stops the lookup before any page leaves the
+asset **unattempted** with the reason `budget-exhausted`. A budget that stops
+it mid-pagination resolves the asset from the captures already retrieved —
+a partial result, never a false "no captures".
 
 ### Rows that are assets are not seeded as pages
 

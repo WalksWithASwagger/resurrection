@@ -11,7 +11,7 @@ export type {
   EncodingSource,
 } from './decode.ts';
 
-export { applyCaptureSelection, runAcquisition } from './acquire.ts';
+export { applyCaptureSelection, runAcquisition, ASSET_LOOKUP_LIMIT } from './acquire.ts';
 export type { AcquisitionOptions, AcquisitionResult, ControlSignal } from './acquire.ts';
 
 export { BudgetLedger, DEFAULT_BUDGETS, EMPTY_SPEND } from './budget.ts';
