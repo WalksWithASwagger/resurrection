@@ -198,6 +198,15 @@ export function parseProjectConfig(value: unknown, source: string): ProjectConfi
   if (windowDays <= 0) {
     throw new Error(`project config ${source}: assetResolution.windowDays must be a positive number`);
   }
+  const maxLookupPages = optionalNumber(
+    assetRaw['maxLookupPages'],
+    DEFAULT_ASSET_RESOLUTION.maxLookupPages,
+    'assetResolution.maxLookupPages',
+    source,
+  );
+  if (maxLookupPages <= 0 || !Number.isInteger(maxLookupPages)) {
+    throw new Error(`project config ${source}: assetResolution.maxLookupPages must be a positive integer`);
+  }
 
   const candidateFilters =
     raw['candidateFilters'] === undefined
@@ -214,7 +223,7 @@ export function parseProjectConfig(value: unknown, source: string): ProjectConfi
     provider,
     discovery,
     selection: { policy, clusterWindowDays },
-    assetResolution: { windowDays },
+    assetResolution: { windowDays, maxLookupPages },
     fidelity,
     candidateFilters,
     outputDirectory: requireString(raw['outputDirectory'], 'outputDirectory', source),

@@ -17,7 +17,15 @@ import { join } from 'node:path';
 
 import { BudgetLedger, EMPTY_SPEND } from './budget.ts';
 import { systemClock, type Clock } from './clock.ts';
-import { buildCdxUrl, parseCdxFilter, parseCdxJson, rowExclusion, type CdxQuery, type CdxRow } from './cdx.ts';
+import {
+  buildCdxUrl,
+  parseCdxFilter,
+  parseCdxJson,
+  rowExclusion,
+  type CdxFilter,
+  type CdxQuery,
+  type CdxRow,
+} from './cdx.ts';
 import type { ProjectConfig } from './config.ts';
 import { decodeBody, type DecodeResult } from './decode.ts';
 import { DEFAULT_ALLOWED_PORTS, type DnsResolver } from './destination.ts';
@@ -634,8 +642,11 @@ async function acquireItem(
 /* per-asset capture resolution (issue #6)                                     */
 /* -------------------------------------------------------------------------- */
 
-/** Captures a per-URL lookup will accept before it stops asking. */
-const ASSET_LOOKUP_LIMIT = 100;
+/**
+ * Rows one page of a per-URL lookup will accept. Further captures are
+ * retrieved by following `resumeKey`, up to `assetResolution.maxLookupPages`.
+ */
+export const ASSET_LOOKUP_LIMIT = 100;
 
 type ResolutionOutcome = 'resolved' | 'failed' | 'exhausted';
 
@@ -705,13 +716,18 @@ async function resolveDependencyCapture(
 }
 
 /**
- * One per-URL index lookup, unbounded in time.
+ * One per-URL index lookup, unbounded in time and paged through `resumeKey`.
  *
  * The site inventory is bounded by the project's declared period, so a URL
  * missing from it may still be archived outside that period — which is exactly
  * the case issue #6 exists for: a page from one era referencing an asset whose
  * only surviving capture is from another. The lookup therefore drops the
  * period bounds and lets the resolver flag the distance instead.
+ *
+ * Pagination is the same `resumeKey` continuation `src/cdx.ts` already
+ * parses and issues. Each page is a separate index request, charged like any
+ * other. `assetResolution.maxLookupPages` is the total cap so one URL cannot
+ * spend the whole run.
  */
 async function lookupAssetCaptures(
   item: WorkItem,
@@ -730,52 +746,110 @@ async function lookupAssetCaptures(
     collapse: 'digest',
     resumeKey: null,
   };
-  const requestUrl = buildCdxUrl(config.provider.cdxEndpoint, query);
   const lookup: AssetLookup = {
     originalUrl: item.originalUrl,
     referringPageUrl: referringPageUrl(item),
     query,
-    requestUrl,
+    requestUrl: buildCdxUrl(config.provider.cdxEndpoint, query),
     issuedAt: iso(clock),
     rawResponseHash: null,
     rawResponsePath: null,
     rowCount: 0,
     candidateRowCount: 0,
+    pageCount: 0,
     limitReached: false,
+    detail: null,
     attempts: 0,
     outcome: 'failed',
     failure: null,
   };
 
-  const result = await fetchResource(context, requestUrl, 'index');
-  lookup.attempts = result.attempts;
-  if (!result.ok) {
-    // A budget stop is not a failure: nothing was tried, and the item is
-    // parked so a resumed run with a larger budget can resolve it.
-    lookup.outcome = result.exhausted === null ? 'failed' : 'budget-exhausted';
-    lookup.failure = result.failure;
-    state.assetLookups.push(lookup);
-    if (result.exhausted === null) {
-      item.status = 'failed';
-      item.failure = result.failure;
-      item.notes.push(`the capture lookup for this URL failed: ${result.failure.kind}`);
+  const filters = config.candidateFilters.map(parseCdxFilter);
+  const maxPages = config.assetResolution.maxLookupPages;
+  let resumeKey: string | null = null;
+  // Created after the first successful page, including an empty one: a recorded
+  // negative stops a second lookup, but a budget stop before any page must not
+  // look like one. Resuming with a larger budget has to be able to ask again.
+  let entry: IndexedCaptureSet | null = null;
+
+  for (let pageIndex = 0; pageIndex < maxPages; pageIndex += 1) {
+    const pageQuery: CdxQuery = { ...query, resumeKey };
+    const requestUrl = buildCdxUrl(config.provider.cdxEndpoint, pageQuery);
+    const result = await fetchResource(context, requestUrl, 'index');
+    lookup.attempts += result.attempts;
+
+    if (!result.ok) {
+      if (lookup.pageCount > 0) {
+        // Pages already retrieved are candidates the resolver can use. Reporting
+        // this URL as having zero captures would be the false gap this path exists
+        // to prevent.
+        lookup.limitReached = true;
+        lookup.detail =
+          result.exhausted === null
+            ? `a later page of the capture lookup failed after ${String(lookup.pageCount)} page(s): ${result.failure?.kind ?? 'unknown'}`
+            : `the ${result.exhausted} budget stopped the capture lookup after ${String(lookup.pageCount)} page(s); later captures were not retrieved`;
+        lookup.outcome = 'complete';
+        item.notes.push(lookup.detail);
+        state.assetLookups.push(lookup);
+        return 'complete';
+      }
+      // A budget stop before any page is not a failure: nothing was tried, and
+      // the item is parked so a resumed run with a larger budget can resolve it.
+      lookup.outcome = result.exhausted === null ? 'failed' : 'budget-exhausted';
+      lookup.failure = result.failure;
+      state.assetLookups.push(lookup);
+      if (result.exhausted === null) {
+        item.status = 'failed';
+        item.failure = result.failure;
+        item.notes.push(`the capture lookup for this URL failed: ${result.failure.kind}`);
+      }
+      return lookup.outcome;
     }
-    return lookup.outcome;
+
+    const stored = await store.put(result.response.body);
+    if (lookup.rawResponseHash === null) {
+      lookup.rawResponseHash = stored.hash;
+      lookup.rawResponsePath = stored.relativePath;
+    }
+    const decoded = decodeBody(result.response.body, {
+      contentType: result.response.headers['content-type'] ?? null,
+    });
+    const page = parseCdxJson(decoded.text ?? '', pageQuery.limit);
+    lookup.pageCount += 1;
+    entry ??= captureSetFor(state, item.originalUrl, 'targeted-lookup');
+    ingestLookupRows(state, entry, lookup, page.rows, filters);
+
+    if (page.resumeKey === null) {
+      lookup.limitReached = page.limitReached;
+      lookup.detail = page.limitReached
+        ? `the last page filled the ${String(ASSET_LOOKUP_LIMIT)}-row page limit with no continuation key, so later captures may exist`
+        : null;
+      lookup.outcome = 'complete';
+      state.assetLookups.push(lookup);
+      return 'complete';
+    }
+
+    resumeKey = page.resumeKey;
   }
 
-  const stored = await store.put(result.response.body);
-  lookup.rawResponseHash = stored.hash;
-  lookup.rawResponsePath = stored.relativePath;
-  const decoded = decodeBody(result.response.body, {
-    contentType: result.response.headers['content-type'] ?? null,
-  });
-  const page = parseCdxJson(decoded.text ?? '', query.limit);
-  const filters = config.candidateFilters.map(parseCdxFilter);
+  lookup.limitReached = true;
+  lookup.detail =
+    `capped after ${String(lookup.pageCount)} page(s) ` +
+    `(assetResolution.maxLookupPages=${String(maxPages)}); later captures were not retrieved`;
+  lookup.outcome = 'complete';
+  item.notes.push(lookup.detail);
+  state.assetLookups.push(lookup);
+  return 'complete';
+}
 
-  // The entry is created even when the lookup found nothing. A recorded
-  // negative is what stops the same URL from being looked up twice.
-  const entry = captureSetFor(state, item.originalUrl, 'targeted-lookup');
-  for (const row of page.rows) {
+function ingestLookupRows(
+  state: JobState,
+  entry: IndexedCaptureSet,
+  lookup: AssetLookup,
+  rows: readonly CdxRow[],
+  filters: readonly CdxFilter[],
+): void {
+  for (const row of rows) {
     if (row.original === '' || row.timestamp === '') continue;
     const excludedBy = rowExclusion(row, filters);
     lookup.rowCount += 1;
@@ -794,11 +868,6 @@ async function lookupAssetCaptures(
     if (entry.candidates.some((candidate) => candidate.timestamp === row.timestamp)) continue;
     entry.candidates.push(candidateFromRow(row, excludedBy));
   }
-
-  lookup.limitReached = page.limitReached;
-  lookup.outcome = 'complete';
-  state.assetLookups.push(lookup);
-  return 'complete';
 }
 
 /**

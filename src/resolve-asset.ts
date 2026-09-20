@@ -31,9 +31,18 @@ export interface AssetResolutionConfig {
    * downstream can treat it as contemporaneous with the page.
    */
   windowDays: number;
+  /**
+   * How many CDX pages a single per-URL asset lookup may retrieve.
+   *
+   * Each page is `ASSET_LOOKUP_LIMIT` (100) rows. The site inventory already
+   * pages through `resumeKey`; this is the same continuation, capped so one
+   * pathological URL cannot spend the whole run's index budget. A lookup that
+   * reaches the cap with captures still unretrieved records `limitReached`.
+   */
+  maxLookupPages: number;
 }
 
-export const DEFAULT_ASSET_RESOLUTION: AssetResolutionConfig = { windowDays: 365 };
+export const DEFAULT_ASSET_RESOLUTION: AssetResolutionConfig = { windowDays: 365, maxLookupPages: 10 };
 
 /** Where the candidate captures came from, and what their absence proves. */
 export type AssetCaptureSource =

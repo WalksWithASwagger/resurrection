@@ -236,11 +236,19 @@ export interface AssetLookup {
   rawResponsePath: string | null;
   rowCount: number;
   candidateRowCount: number;
+  /** CDX pages this lookup retrieved. One when the URL had fewer than 100 captures. */
+  pageCount: number;
   /**
-   * The lookup filled its declared row limit, so it may not describe every
-   * capture of this URL. The same honesty the inventory owes about pagination.
+   * The lookup stopped without proving it had every capture of this URL.
+   * That now means "capped after N pages" (or stopped mid-pagination by a
+   * budget), not "capped after one page of up to 100 rows".
    */
   limitReached: boolean;
+  /**
+   * Why the lookup stopped asking, when it may not describe every capture.
+   * Null when the provider had nothing more to return.
+   */
+  detail: string | null;
   /** Index attempts this lookup charged to the budget, retries included. */
   attempts: number;
   /** Budget exhaustion is not a failure: nothing was tried. */
