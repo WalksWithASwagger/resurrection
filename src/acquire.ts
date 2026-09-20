@@ -47,16 +47,19 @@ import {
   saveJob,
   type ArchiveInjectionRecord,
   type AssetLookup,
+  type CaptureReselection,
   type EncodingRecord,
   type IndexedCaptureSet,
   type InventoryRun,
   type JobState,
+  type ReselectionAttempt,
   type WorkItem,
 } from './job.ts';
 import { RateLimiter } from './ratelimit.ts';
+import { outcomeForFailure, RESELECTABLE_OUTCOMES } from './outcomes.ts';
 import { classifyCollection } from './reclassify.ts';
 import { captureKey, resolveAssetCapture } from './resolve-asset.ts';
-import { selectCapture, selectionTarget, type CaptureCandidate } from './select.ts';
+import { selectCapture, selectUnusedCapture, selectionTarget, type CaptureCandidate, type CaptureSelection } from './select.ts';
 import { BodyStore } from './store.ts';
 import { stripArchiveInjection } from './toolbar.ts';
 import type { HttpTransport } from './transport.ts';
@@ -163,6 +166,9 @@ export async function runAcquisition(options: AcquisitionOptions): Promise<Acqui
     if (halted === null) {
       seedPageItems(state, config, clock);
       halted = await runFetchLoop(state, config, context, store, clock, options.signal);
+    }
+    if (halted === null) {
+      halted = await runOutcomeReselection(state, config, context, store, clock, options.signal);
     }
   } catch (error) {
     // The process may simply die here. The finally block below still persists
@@ -439,8 +445,9 @@ function candidateFromRow(row: CdxRow, excludedBy: string | null): CaptureCandid
 
 /**
  * Apply the declared capture selection policy to every item still waiting on a
- * request. An item that already holds validated bytes is never re-pointed: the
- * acquired evidence stands, and reselecting it is an explicit later step.
+ * request. An item that already holds validated bytes is never re-pointed
+ * here: the first-choice evidence stands until `runOutcomeReselection` tries a
+ * next-best capture after a bad outcome (issue #22).
  *
  * A dependency that has already been resolved against its referring page is
  * left alone. Its target is that page, not the project's declared period
@@ -636,6 +643,239 @@ async function acquireItem(
     enqueueDependencies(item, state, config, decoded, clock);
   }
   return false;
+}
+
+/* -------------------------------------------------------------------------- */
+/* outcome reselection (issue #22)                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * After the first-choice captures have been classified, try the next-best
+ * unused capture of any page that landed on a confirmed non-content outcome.
+ *
+ * Ranking is `selectCapture` over the unused candidates — there is no second
+ * policy. Each further attempt is an ordinary fetch, charged to the same
+ * budgets. The loop stops per page at the configured limit or the first `ok`.
+ * A resume sees `reselection.completed` and does not try the same page again.
+ */
+async function runOutcomeReselection(
+  state: JobState,
+  config: ProjectConfig,
+  context: FetchContext,
+  store: BodyStore,
+  clock: Clock,
+  signal: (() => ControlSignal) | undefined,
+): Promise<'paused' | 'cancelled' | null> {
+  await classifyCollection(state, store, config.fidelity);
+
+  for (;;) {
+    const pending = state.items.filter((item) => needsOutcomeReselection(item, config.outcomeReselection.maxAttempts));
+    if (pending.length === 0) return null;
+
+    let fetchedAnAlternative = false;
+    for (const item of pending) {
+      const control = signal?.() ?? 'continue';
+      if (control !== 'continue') {
+        const halted = control === 'pause' ? 'paused' : 'cancelled';
+        park(state, control === 'pause' ? 'paused' : 'cancelled');
+        state.runState = halted;
+        state.events.push({ at: iso(clock), kind: halted, detail: `stopped before reselecting ${item.originalUrl}` });
+        await saveJob(config.outputDirectory, state);
+        return halted;
+      }
+
+      const record = ensureReselectionRecord(item);
+      const used = usedReselectionTimestamps(item);
+      const target = selectionTarget(state.scope);
+      const next = selectUnusedCapture(item.capture.candidates, config.selection, target, used);
+      if (next === null) {
+        record.completed = true;
+        record.stoppedReason = 'no-remaining-alternative';
+        await saveJob(config.outputDirectory, state);
+        continue;
+      }
+
+      const previousOutcome = item.outcome?.outcome ?? 'unattempted';
+      const snapshot = snapshotLiveCapture(item);
+      pointAtCapture(item, next, previousOutcome);
+      const exhausted = await acquireItem(item, state, config, context, store, clock);
+      if (exhausted) {
+        restoreLiveCapture(item, snapshot);
+        record.stoppedReason = 'budget-exhausted';
+        park(state, 'budget-exhausted');
+        state.runState = 'paused';
+        state.events.push({ at: iso(clock), kind: 'paused', detail: 'budget exhausted' });
+        await saveJob(config.outputDirectory, state);
+        return 'paused';
+      }
+
+      fetchedAnAlternative = true;
+      record.furtherAttempts += 1;
+
+      if (!isComplete(item)) {
+        const failedOutcome = item.failure !== null ? outcomeForFailure(item.failure) : 'http-error';
+        const failedDetail =
+          item.failure !== null
+            ? `${item.failure.kind}: ${item.failure.message}`
+            : 'the alternative produced no validated bytes';
+        record.attempts.push({
+          order: record.attempts.length + 1,
+          timestamp: next.timestamp,
+          outcome: failedOutcome,
+          detail: failedDetail,
+        });
+        restoreLiveCapture(item, snapshot);
+        if (record.furtherAttempts >= config.outcomeReselection.maxAttempts) {
+          record.completed = true;
+          record.stoppedReason = 'attempt-limit';
+        }
+        await saveJob(config.outputDirectory, state);
+        continue;
+      }
+
+      await classifyCollection(state, store, config.fidelity);
+      recordAttemptFromItem(item, record, next.timestamp);
+      if (item.outcome?.outcome === 'ok') {
+        record.completed = true;
+        record.stoppedReason = 'ok';
+      } else if (record.furtherAttempts >= config.outcomeReselection.maxAttempts) {
+        record.completed = true;
+        record.stoppedReason = 'attempt-limit';
+      }
+      await saveJob(config.outputDirectory, state);
+    }
+
+    if (fetchedAnAlternative) {
+      const halted = await runFetchLoop(state, config, context, store, clock, signal);
+      if (halted !== null) return halted;
+      await classifyCollection(state, store, config.fidelity);
+    } else {
+      return null;
+    }
+  }
+}
+
+function needsOutcomeReselection(item: WorkItem, maxAttempts: number): boolean {
+  if (item.kind !== 'page') return false;
+  const record = item.capture.reselection;
+  if (record?.completed === true) return false;
+  if ((record?.furtherAttempts ?? 0) >= maxAttempts) return false;
+  if (record !== null) return item.outcome?.outcome !== 'ok';
+  const outcome = item.outcome?.outcome;
+  return outcome !== undefined && RESELECTABLE_OUTCOMES.has(outcome);
+}
+
+function ensureReselectionRecord(item: WorkItem): CaptureReselection {
+  if (item.capture.reselection !== null) return item.capture.reselection;
+  const first: ReselectionAttempt | null =
+    item.capture.requestedTimestamp === null || item.outcome === null
+      ? null
+      : {
+          order: 1,
+          timestamp: item.capture.requestedTimestamp,
+          outcome: item.outcome.outcome,
+          detail: item.outcome.detail,
+        };
+  const record: CaptureReselection = {
+    attempts: first === null ? [] : [first],
+    furtherAttempts: 0,
+    completed: false,
+    stoppedReason: null,
+  };
+  item.capture.reselection = record;
+  return record;
+}
+
+function usedReselectionTimestamps(item: WorkItem): Set<string> {
+  const used = new Set<string>();
+  for (const attempt of item.capture.reselection?.attempts ?? []) used.add(attempt.timestamp);
+  if (item.capture.requestedTimestamp !== null) used.add(item.capture.requestedTimestamp);
+  return used;
+}
+
+function recordAttemptFromItem(item: WorkItem, record: CaptureReselection, timestamp: string): void {
+  record.attempts.push({
+    order: record.attempts.length + 1,
+    timestamp,
+    outcome: item.outcome?.outcome ?? 'unattempted',
+    detail: item.outcome?.detail ?? 'no classification pass has run',
+  });
+}
+
+interface LiveCaptureSnapshot {
+  status: WorkItem['status'];
+  unattemptedReason: WorkItem['unattemptedReason'];
+  failure: WorkItem['failure'];
+  requestedTimestamp: string | null;
+  servedTimestamp: string | null;
+  distanceSeconds: number | null;
+  replayModifier: string;
+  selection: WorkItem['capture']['selection'];
+  archiveDigest: string | null;
+  archiveStatus: string | null;
+  fetch: WorkItem['fetch'];
+  encoding: WorkItem['encoding'];
+  outcome: WorkItem['outcome'];
+  fidelity: WorkItem['fidelity'];
+  notesLength: number;
+}
+
+function snapshotLiveCapture(item: WorkItem): LiveCaptureSnapshot {
+  return {
+    status: item.status,
+    unattemptedReason: item.unattemptedReason,
+    failure: item.failure,
+    requestedTimestamp: item.capture.requestedTimestamp,
+    servedTimestamp: item.capture.servedTimestamp,
+    distanceSeconds: item.capture.distanceSeconds,
+    replayModifier: item.capture.replayModifier,
+    selection: item.capture.selection,
+    archiveDigest: item.capture.archiveDigest,
+    archiveStatus: item.capture.archiveStatus,
+    fetch: item.fetch,
+    encoding: item.encoding,
+    outcome: item.outcome,
+    fidelity: item.fidelity,
+    notesLength: item.notes.length,
+  };
+}
+
+function restoreLiveCapture(item: WorkItem, snapshot: LiveCaptureSnapshot): void {
+  item.status = snapshot.status;
+  item.unattemptedReason = snapshot.unattemptedReason;
+  item.failure = snapshot.failure;
+  item.capture.requestedTimestamp = snapshot.requestedTimestamp;
+  item.capture.servedTimestamp = snapshot.servedTimestamp;
+  item.capture.distanceSeconds = snapshot.distanceSeconds;
+  item.capture.replayModifier = snapshot.replayModifier;
+  item.capture.selection = snapshot.selection;
+  item.capture.archiveDigest = snapshot.archiveDigest;
+  item.capture.archiveStatus = snapshot.archiveStatus;
+  item.fetch = snapshot.fetch;
+  item.encoding = snapshot.encoding;
+  item.outcome = snapshot.outcome;
+  item.fidelity = snapshot.fidelity;
+  item.notes.length = snapshot.notesLength;
+}
+
+function pointAtCapture(item: WorkItem, selection: CaptureSelection, previousOutcome: string): void {
+  const chosen = item.capture.candidates.find((candidate) => candidate.timestamp === selection.timestamp);
+  item.status = 'unattempted';
+  item.unattemptedReason = 'queued';
+  item.failure = null;
+  item.capture.requestedTimestamp = selection.timestamp;
+  item.capture.servedTimestamp = null;
+  item.capture.distanceSeconds = null;
+  item.capture.selection = {
+    ...selection,
+    reason: `next-best alternative after ${previousOutcome}: ${selection.reason}`,
+  };
+  item.capture.archiveDigest = chosen?.digest ?? null;
+  item.capture.archiveStatus = chosen?.statusCode ?? null;
+  item.fetch = null;
+  item.encoding = null;
+  item.outcome = null;
+  item.fidelity = null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1008,6 +1248,7 @@ function newItem(input: {
       resolution: null,
       archiveDigest: input.candidate?.digest ?? null,
       archiveStatus: input.candidate?.statusCode ?? null,
+      reselection: null,
     },
     fetch: null,
     encoding: null,

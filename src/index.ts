@@ -39,7 +39,13 @@ export type {
   DigestObservation,
 } from './resolve-asset.ts';
 
-export { selectCapture, selectionTarget, CAPTURE_SELECTION_POLICIES, DEFAULT_SELECTION } from './select.ts';
+export {
+  selectCapture,
+  selectUnusedCapture,
+  selectionTarget,
+  CAPTURE_SELECTION_POLICIES,
+  DEFAULT_SELECTION,
+} from './select.ts';
 export type {
   CaptureCandidate,
   CaptureSelection,
@@ -53,8 +59,20 @@ export type { InjectionRemoval, StripResult } from './toolbar.ts';
 export { createTestClock, systemClock } from './clock.ts';
 export type { Clock } from './clock.ts';
 
-export { DEFAULT_DISCOVERY, DEFAULT_PROVIDER, loadProjectConfig, parseProjectConfig } from './config.ts';
-export type { DiscoveryConfig, ProjectConfig, ProviderConfig, ScopeConfig } from './config.ts';
+export {
+  DEFAULT_DISCOVERY,
+  DEFAULT_OUTCOME_RESELECTION,
+  DEFAULT_PROVIDER,
+  loadProjectConfig,
+  parseProjectConfig,
+} from './config.ts';
+export type {
+  DiscoveryConfig,
+  OutcomeReselectionConfig,
+  ProjectConfig,
+  ProviderConfig,
+  ScopeConfig,
+} from './config.ts';
 
 export {
   blockedAddressReason,
@@ -119,12 +137,15 @@ export type {
   ArchiveInjectionRecord,
   AssetLookup,
   CaptureRecord,
+  CaptureReselection,
   IndexedCaptureSet,
   EncodingRecord,
   FetchRecord,
   InventoryRun,
   JobState,
   RedirectHop,
+  ReselectionAttempt,
+  ReselectionStopReason,
   TimelineEntry,
   WorkItem,
 } from './job.ts';
@@ -136,6 +157,7 @@ export {
   zeroOutcomeCounts,
   ITEM_OUTCOMES,
   OUTCOME_BY_FAILURE_KIND,
+  RESELECTABLE_OUTCOMES,
 } from './outcomes.ts';
 export type {
   Failure,

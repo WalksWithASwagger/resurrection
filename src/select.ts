@@ -77,6 +77,25 @@ export function selectionTarget(scope: { from: string | null; to: string | null 
   return null;
 }
 
+/**
+ * The next unused capture, ranked by the same policy that chose the first.
+ *
+ * Reselection (issue #22) must not grow a second ranking function: it excludes
+ * the timestamps already tried and asks `selectCapture` again.
+ */
+export function selectUnusedCapture(
+  candidates: readonly CaptureCandidate[],
+  selection: SelectionConfig,
+  target: string | null,
+  usedTimestamps: ReadonlySet<string>,
+): CaptureSelection | null {
+  return selectCapture(
+    candidates.filter((candidate) => !usedTimestamps.has(candidate.timestamp)),
+    selection,
+    target,
+  );
+}
+
 export function selectCapture(
   candidates: readonly CaptureCandidate[],
   selection: SelectionConfig,

@@ -28,6 +28,7 @@ import {
   type ArchiveInjectionRecord,
   type AssetLookup,
   type EncodingRecord,
+  type CaptureReselection,
   type JobState,
   type RedirectHop,
   type TimelineEntry,
@@ -45,6 +46,8 @@ export const EVIDENCE_FILE = 'evidence.json';
  * 3 added the per-asset capture resolution section (issue #6).
  * 4 added the fidelity section and the per-file fidelity digest (issue #8).
  * 5 added the code and fixture revision pair (issue #21).
+ * The per-item outcome-reselection trail (issue #22) is an additive
+ * `reselection` field on fetched entries in this same version.
  *
  * The job state version is deliberately *not* bumped alongside it. Revisions
  * live only on this report: a version 3 job stays loadable, and `reclassify`
@@ -90,6 +93,8 @@ export interface FetchedEntry {
   /** What the defensive archive-injection strip found in these bytes. */
   archiveInjection: ArchiveInjectionRecord | null;
   outcome: OutcomeRecord | null;
+  /** Bounded retries of unused captures after a bad first-choice outcome. */
+  reselection: CaptureReselection | null;
 }
 
 export interface FailedEntry {
@@ -421,6 +426,7 @@ export function buildEvidenceReport(
         encoding: item.encoding,
         archiveInjection: item.fetch.archiveInjection,
         outcome: item.outcome,
+        reselection: item.capture.reselection,
       });
     }
 
@@ -500,7 +506,7 @@ export function buildEvidenceReport(
           originalUrl: item.originalUrl,
           detail: `${item.outcome?.outcome ?? 'unclassified'}: ${
             item.outcome?.detail ?? 'no classification pass has run'
-          }`,
+          }${reselectionGapNote(item.capture.reselection)}`,
           remedy: 'select an alternative capture; this body must not become a reference',
         });
       }
@@ -757,6 +763,13 @@ export function summarize(report: EvidenceReport): string {
   ];
   for (const reason of report.inventory.partialReasons) lines.push(`               ${reason}`);
   return lines.join('\n');
+}
+
+function reselectionGapNote(record: CaptureReselection | null): string {
+  if (record === null) return '';
+  if (record.furtherAttempts === 0) return '; 0 alternatives were tried';
+  const trail = record.attempts.map((attempt) => `${attempt.timestamp}=${attempt.outcome}`).join(', ');
+  return `; ${String(record.furtherAttempts)} alternative(s) tried: ${trail}`;
 }
 
 /** Non-zero outcome counts only, so the summary stays one screen. */

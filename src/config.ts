@@ -63,6 +63,19 @@ export interface DiscoveryConfig {
   followPageLinks: boolean;
 }
 
+/**
+ * Bounded retries of a page's own unused captures after a bad outcome.
+ *
+ * `maxAttempts` counts *further* alternatives, not the first-choice capture.
+ * The default is 2 so one parked-domain page cannot turn into an unbounded
+ * refetch of its whole capture history.
+ */
+export interface OutcomeReselectionConfig {
+  maxAttempts: number;
+}
+
+export const DEFAULT_OUTCOME_RESELECTION: OutcomeReselectionConfig = { maxAttempts: 2 };
+
 export interface ProjectConfig {
   projectId: string;
   scope: ScopeConfig;
@@ -71,6 +84,8 @@ export interface ProjectConfig {
   discovery: DiscoveryConfig;
   /** Which capture is chosen when the inventory offers several. */
   selection: SelectionConfig;
+  /** How many unused captures to try after a page classifies as a bad outcome. */
+  outcomeReselection: OutcomeReselectionConfig;
   /** How far a dependency's capture may sit from its referring page. */
   assetResolution: AssetResolutionConfig;
   /** Signal weights, bands and recorded promotion overrides (issue #8). */
@@ -216,6 +231,17 @@ export function parseProjectConfig(value: unknown, source: string): ProjectConfi
 
   const fidelity = parseFidelity(optionalObject(raw['fidelity']), source);
 
+  const reselectionRaw = optionalObject(raw['outcomeReselection']);
+  const maxAttempts = optionalNumber(
+    reselectionRaw['maxAttempts'],
+    DEFAULT_OUTCOME_RESELECTION.maxAttempts,
+    'outcomeReselection.maxAttempts',
+    source,
+  );
+  if (!Number.isInteger(maxAttempts)) {
+    throw new Error(`project config ${source}: outcomeReselection.maxAttempts must be an integer`);
+  }
+
   return {
     projectId,
     scope,
@@ -223,6 +249,7 @@ export function parseProjectConfig(value: unknown, source: string): ProjectConfi
     provider,
     discovery,
     selection: { policy, clusterWindowDays },
+    outcomeReselection: { maxAttempts },
     assetResolution: { windowDays, maxLookupPages },
     fidelity,
     candidateFilters,

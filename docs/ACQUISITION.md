@@ -43,6 +43,7 @@ are never merged into one success number.
 | `provider` | Endpoints, the host allowlist, the rate limit and the request timeout. |
 | `discovery` | Which link relations are followed. |
 | `selection` | Which capture is chosen when the inventory offers several. |
+| `outcomeReselection.maxAttempts` | Further unused captures to fetch after a page's first-choice classifies as a bad outcome. Default 2. |
 | `assetResolution.windowDays` | How far a dependency's capture may sit from its referring page before it is flagged. |
 | `assetResolution.maxLookupPages` | How many CDX pages one per-URL asset lookup may retrieve (default 10). Each page is 100 rows. |
 | `candidateFilters` | CDX filter expressions a capture must satisfy to be acquirable. |
@@ -158,8 +159,21 @@ late.
 Selection runs over the candidates the inventory already returned, so changing
 the policy and reselecting costs **zero index requests** — the same property
 that makes reclassification cheap. Every capture the inventory offered stays on
-the item, with the filter verdict for each, and an item that already holds
-validated bytes is never re-pointed.
+the item, with the filter verdict for each.
+
+An item that already holds validated bytes is not re-pointed by a policy
+change. It *is* re-pointed when those bytes classify as a confirmed
+non-content outcome (`origin-soft-404`, `archive-interstitial`,
+`parked-domain`, `meta-refresh-redirect`, `frameset-only`) and the inventory
+retained an unused capture of the same URL. The next capture is ranked by the
+same declared policy, excluding timestamps already tried. The configured
+`outcomeReselection.maxAttempts` (default 2) bounds how many *further*
+alternatives are fetched; the loop stops earlier on the first `ok`. Every
+attempt is recorded on the item (timestamp, order, outcome) and charged to the
+existing request and byte budgets. A budget that stops mid-retry leaves a
+partial report and an incomplete reselection, so a resume continues rather
+than starting over. Assets are not retried this way: their alternatives are
+already resolved by issue #6.
 
 ## Per-asset capture resolution
 

@@ -502,6 +502,7 @@ function reportFor(state: JobState, directory: string): EvidenceReport {
     provider: { cdxEndpoint: '', replayEndpoint: '', allowedHosts: [], minRequestIntervalMs: 0, requestTimeoutMs: 0 },
     discovery: { followRelations: [], followPageLinks: false },
     selection: { policy: 'nearest', clusterWindowDays: 90 },
+    outcomeReselection: { maxAttempts: 2 },
     assetResolution: { windowDays: 365, maxLookupPages: 10 },
     fidelity: DEFAULT_FIDELITY,
     candidateFilters: [],

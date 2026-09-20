@@ -155,8 +155,23 @@ served is evidence and deleting it would hide what happened. What #5 adds is
 that validated bytes are no longer sufficient for the next milestone to use
 them. **M2 selects from `referenceEligible` items and from nothing else.**
 
-Marking eligibility is where this stops. Freezing the reference bundle is M2,
-and choosing an alternative capture for a bad outcome is issue #6 and issue #7.
+Marking eligibility is still the content rule: `referenceEligible` means
+`outcome === 'ok'` and nothing else. What happens *before* that mark is
+written is now a bounded retry of the page's own unused captures. When the
+first-choice capture classifies as `origin-soft-404`, `archive-interstitial`,
+`parked-domain`, `meta-refresh-redirect` or `frameset-only`, the acquisition
+loop asks `src/select.ts` for the next-best unused capture under the declared
+policy and fetches it. It stops at `outcomeReselection.maxAttempts` further
+alternatives (default 2) or the first `ok`, whichever comes first. Each
+attempt is charged to the existing request and byte budgets; a budget that
+stops mid-retry produces a partial report, not a failure. A page with no
+unused alternative, or whose alternatives stay non-content, keeps its
+`non-content-body` gap and the gap names every timestamp that was tried.
+Reselection changes which capture's bytes and outcome the item carries. It
+does not change the eligibility rule, the outcome taxonomy, the page-selection
+default or how assets resolve.
+
+Freezing the reference bundle remains M2.
 
 Fidelity scoring (issue #8, [FIDELITY.md](FIDELITY.md)) composes with this rule
 rather than competing with it, and this rule wins. An item whose outcome is not
