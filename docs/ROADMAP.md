@@ -68,7 +68,7 @@ Done when readiness conditions R1 through R5 below pass with retained evidence. 
 | R2 | All required scoped visual and interaction checks pass for the first pilot, with no unacknowledged critical mismatch. | Not met. Depends on M3. |
 | R3 | A clean export rebuilds and runs without archive/model calls or required remote assets. | Not met. No export step exists. |
 | R4 | Missing-source, retry/resume, budget, untrusted-input and network-isolation tests pass. | **Met.** Covered across `tests/`, including the isolation suite and a crafted-URL case. |
-| R5 | The engine runs from configuration with no UncleWeed-specific branches; evaluation evidence names the code and fixture revisions. | Partly met. The engine has no site-specific branches, but the evidence report carries no code or fixture revision field. |
+| R5 | The engine runs from configuration with no UncleWeed-specific branches; evaluation evidence names the code and fixture revisions. | **Met.** `evidence.json` `revisions` records the embedded `CODE_REVISION` (overridable with `--code-revision`, never a runtime git lookup) and the SHA-256 of the fixture manifest, or `null` for a live run. |
 
 These conditions measure engineering readiness. They do not introduce another user permission step.
 
@@ -85,13 +85,12 @@ Done when the second site's scoped fidelity report and portable export pass, or 
 
 ## Immediate assignment
 
-M1 is delivered against fixtures. Two things stand between here and M2:
+M1 is delivered against fixtures. R5 is met. One thing stands between here and
+M2:
 
 1. **Perform the bounded UncleWeed acquisition** (issue #3). Human-approved,
    logged and budget-bounded. An archive failure is a partial result, never a
    substituted synthetic success.
-2. **Record code and fixture revisions in the evidence report**, the one
-   outstanding half of R5.
 
 Then begin M2 from the acquired collection. Do not build account management,
 hosted billing, a redesigned site template, broad CMS integrations or the Spark

@@ -16,7 +16,7 @@
  * (agentic/contract.json, safety.private_material_excluded).
  */
 
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { BudgetSpend, Budgets } from './budget.ts';
@@ -38,20 +38,23 @@ import { captureDistanceSeconds, expandTimestamp } from './wayback.ts';
 import type { CaptureSelection } from './select.ts';
 import { zeroOutcomeCounts, type Failure, type ItemOutcome, type OutcomeRecord, type UnattemptedReason } from './outcomes.ts';
 import { weakestSignal, type FidelityBand, type FidelityScore } from './fidelity.ts';
+import { defaultRevisions, type EvidenceRevisions } from './revision.ts';
 
 export const EVIDENCE_FILE = 'evidence.json';
 /**
  * 3 added the per-asset capture resolution section (issue #6).
  * 4 added the fidelity section and the per-file fidelity digest (issue #8).
+ * 5 added the code and fixture revision pair (issue #21).
  *
- * The job state version is deliberately *not* bumped alongside it. A version 3
- * job carries no `fidelity` on its items, and that is a visible absence rather
- * than a wrong number: it reports zero scored pages, and one `reclassify` run
- * fills it in from bytes already stored, for zero requests. The 2 to 3 bump
- * was different in kind, because a version 2 job would have reported every
- * asset as having zero captures, which reads as a fact rather than a gap.
+ * The job state version is deliberately *not* bumped alongside it. Revisions
+ * live only on this report: a version 3 job stays loadable, and `reclassify`
+ * or `report` copies `revisions` off the existing evidence file so a later
+ * HEAD cannot rewrite the identity of an already-acquired collection. The 2
+ * to 3 bump was different in kind, because a version 2 job would have
+ * reported every asset as having zero captures, which reads as a fact rather
+ * than a gap.
  */
-export const EVIDENCE_SCHEMA_VERSION = 4;
+export const EVIDENCE_SCHEMA_VERSION = 5;
 
 export interface IndexedEntry {
   originalUrl: string;
@@ -206,6 +209,12 @@ export interface EvidenceReport {
   projectId: string;
   generatedAt: string;
   runState: string;
+  /**
+   * Identity of the acquiring code and, when a fixture produced the run, of
+   * that fixture. `fixture` is null for a live-transport run, never omitted
+   * and never invented. See src/revision.ts.
+   */
+  revisions: EvidenceRevisions;
   scope: JobState['scope'];
   budgets: Budgets;
   spend: BudgetSpend;
@@ -298,7 +307,11 @@ export interface EvidenceReport {
 /** A capture more than a year from the requested one is flagged, not dropped. */
 export const ERA_DISTANCE_WARNING_SECONDS = 365 * 24 * 60 * 60;
 
-export function buildEvidenceReport(state: JobState, config: ProjectConfig): EvidenceReport {
+export function buildEvidenceReport(
+  state: JobState,
+  config: ProjectConfig,
+  revisions?: EvidenceRevisions,
+): EvidenceReport {
   const indexed: IndexedEntry[] = state.items.map((item) => ({
     originalUrl: item.originalUrl,
     kind: item.kind,
@@ -607,6 +620,7 @@ export function buildEvidenceReport(state: JobState, config: ProjectConfig): Evi
     projectId: config.projectId,
     generatedAt: state.updatedAt,
     runState: state.runState,
+    revisions: defaultRevisions(revisions),
     scope: state.scope,
     budgets: state.budgets,
     spend: state.spend,
@@ -693,12 +707,34 @@ export async function writeEvidenceReport(directory: string, report: EvidenceRep
   return path;
 }
 
+/**
+ * Revisions already recorded for a collection on disk.
+ *
+ * Rebuilding a report must reuse these rather than re-reading the current
+ * tree: a later commit is not a change in the code that acquired the bytes.
+ * Missing or malformed files return null so a first write can record them.
+ */
+export async function loadEvidenceRevisions(directory: string): Promise<EvidenceRevisions | null> {
+  const text = await readFile(join(directory, EVIDENCE_FILE), 'utf8').catch(() => null);
+  if (text === null) return null;
+  const parsed: unknown = JSON.parse(text);
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const revisions = (parsed as { revisions?: unknown }).revisions;
+  if (typeof revisions !== 'object' || revisions === null) return null;
+  const code = (revisions as { code?: unknown }).code;
+  const fixture = (revisions as { fixture?: unknown }).fixture;
+  if (typeof code !== 'string') return null;
+  if (fixture !== null && typeof fixture !== 'string') return null;
+  return { code, fixture };
+}
+
 /** One-screen summary for the CLI. Counts only; no body content is printed. */
 export function summarize(report: EvidenceReport): string {
   const { counts, spend } = report;
   const lines = [
     `project        ${report.projectId}`,
     `run state      ${report.runState}`,
+    `revisions      code ${report.revisions.code}; fixture ${report.revisions.fixture ?? 'none'}`,
     `indexed        ${counts.indexed}`,
     `fetched        ${counts.fetched}`,
     `failed         ${counts.failed}`,
