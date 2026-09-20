@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit",
     "acquire": "node src/cli.ts",
     "acquire:fixture": "node src/fixture-demo.ts",
-    "reclassify:fixture": "node src/cli.ts reclassify --job tmp/demo-acquisition"
+    "reclassify:fixture": "node src/fixture-reclassify.ts"
   },
   "devDependencies": {
     "@types/node": "24.7.0",
