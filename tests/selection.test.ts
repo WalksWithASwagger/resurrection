@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 
 import {
   selectCapture,
+  selectUnusedCapture,
   selectionTarget,
   expandTimestamp,
   CAPTURE_SELECTION_POLICIES,
@@ -135,4 +136,14 @@ test('a capture set with no usable timestamp selects nothing rather than guessin
 test('the default is nearest, and the policy set is closed', () => {
   assert.equal(DEFAULT_SELECTION.policy, 'nearest');
   assert.deepEqual([...CAPTURE_SELECTION_POLICIES], ['nearest', 'earliest-largest']);
+});
+
+test('unused captures are ranked by the same policy, excluding timestamps already tried', () => {
+  const target = expandTimestamp('1999', 'end');
+  const first = selectCapture(DISAGREEING_SET, NEAREST, target);
+  const next = selectUnusedCapture(DISAGREEING_SET, NEAREST, target, new Set([first?.timestamp ?? '']));
+
+  assert.equal(first?.timestamp, '19991220000000');
+  assert.equal(next?.timestamp, '19981101000000', 'the second-nearest capture, not a different ranking');
+  assert.equal(selectUnusedCapture(DISAGREEING_SET, NEAREST, target, new Set(DISAGREEING_SET.map((c) => c.timestamp))), null);
 });

@@ -21,7 +21,7 @@ import type { CdxQuery } from './cdx.ts';
 import type { ScopeConfig } from './config.ts';
 import type { LinkRelation } from './discover.ts';
 import type { FidelityScore } from './fidelity.ts';
-import type { Failure, OutcomeRecord, UnattemptedReason } from './outcomes.ts';
+import type { Failure, ItemOutcome, OutcomeRecord, UnattemptedReason } from './outcomes.ts';
 import type { AssetResolution } from './resolve-asset.ts';
 import type { CaptureCandidate, CaptureSelection } from './select.ts';
 
@@ -33,6 +33,12 @@ export const JOB_FILE = 'job.json';
  * resumed: its items carry no resolution and its state carries no capture
  * index, so resuming one would report every asset as having zero captures.
  * A loud refusal is the point; the alternative is a silently wrong report.
+ *
+ * Outcome reselection (issue #22) is an additive `capture.reselection` field
+ * on this same version. A job written before that field existed loads as
+ * `null`, which means "not yet considered", not "already finished". Bumping
+ * the version would refuse those jobs rather than let a resume try the
+ * alternatives they already retained.
  */
 export const JOB_STATE_VERSION = 3;
 
@@ -54,7 +60,7 @@ export interface CaptureRecord {
   distanceSeconds: number | null;
   /** `id_` for pages, assets and documents; `if_` for frames. */
   replayModifier: string;
-  /** Other captures the inventory offered, kept for reselection in M2. */
+  /** Other captures the inventory offered, kept so a bad outcome can retry one. */
   alternatives: string[];
   /**
    * Every capture the inventory offered, with the row metadata a selection
@@ -81,6 +87,38 @@ export interface CaptureRecord {
    * it is what establishes a site's own error template (src/classify.ts).
    */
   archiveStatus: string | null;
+  /**
+   * Bounded retries of this page's own unused captures after a bad outcome
+   * (issue #22). Null until a classification pass has decided whether to try.
+   * Additive on job version 3: an older job loads as null.
+   */
+  reselection: CaptureReselection | null;
+}
+
+/** Why a page's outcome-reselection loop stopped. */
+export type ReselectionStopReason = 'ok' | 'attempt-limit' | 'no-remaining-alternative' | 'budget-exhausted';
+
+/** One capture that was fetched and classified while looking for recovered content. */
+export interface ReselectionAttempt {
+  /** 1-based. The first-choice capture is 1. */
+  order: number;
+  timestamp: string;
+  outcome: ItemOutcome;
+  detail: string;
+}
+
+/**
+ * The audit trail for trying the next-best captures of one page.
+ *
+ * `furtherAttempts` is what the configured limit bounds: alternatives fetched
+ * after the first-choice, not the first-choice itself. `completed` is what a
+ * resume reads so a finished page is not retried.
+ */
+export interface CaptureReselection {
+  attempts: ReselectionAttempt[];
+  furtherAttempts: number;
+  completed: boolean;
+  stoppedReason: ReselectionStopReason | null;
 }
 
 export interface FetchRecord {
@@ -355,6 +393,10 @@ export async function loadJob(directory: string): Promise<JobState | null> {
   const state = parsed as JobState;
   if (state.version !== JOB_STATE_VERSION) {
     throw new Error(`job file ${path} has version ${String(state.version)}, expected ${JOB_STATE_VERSION}`);
+  }
+  // Additive field: a version 3 job written before issue #22 has no key here.
+  for (const item of state.items) {
+    item.capture.reselection ??= null;
   }
   return state;
 }

@@ -11,7 +11,7 @@
  */
 
 import { runAcquisition, type ControlSignal } from './acquire.ts';
-import { loadProjectConfig } from './config.ts';
+import { DEFAULT_OUTCOME_RESELECTION, loadProjectConfig } from './config.ts';
 import { buildEvidenceReport, loadEvidenceRevisions, summarize, writeEvidenceReport } from './evidence.ts';
 import { createFixtureTransport, loadFixtureManifest } from './fixture-transport.ts';
 import { CODE_REVISION, fixtureRevisionFromPath } from './revision.ts';
@@ -210,6 +210,7 @@ async function renderReport(
       },
       discovery: { followRelations: [], followPageLinks: false },
       selection: DEFAULT_SELECTION,
+      outcomeReselection: DEFAULT_OUTCOME_RESELECTION,
       // Each resolved asset carries the window that was actually applied to it;
       // this is only the section-level default for a job that resolved none.
       assetResolution: DEFAULT_ASSET_RESOLUTION,

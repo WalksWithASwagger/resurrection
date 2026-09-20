@@ -124,6 +124,21 @@ export type ItemOutcome =
   /** No request happened. */
   | 'unattempted';
 
+/**
+ * Outcomes that mean the chosen capture holds no recovered content, so another
+ * capture of the same URL is worth trying (issue #22). The set is closed and
+ * named here so the fetch loop does not invent a second success/failure rule.
+ * `unverified-soft-404` is intentionally absent: that is an unconfirmed
+ * suspicion, not a confirmed non-content body.
+ */
+export const RESELECTABLE_OUTCOMES: ReadonlySet<ItemOutcome> = new Set([
+  'origin-soft-404',
+  'archive-interstitial',
+  'parked-domain',
+  'meta-refresh-redirect',
+  'frameset-only',
+]);
+
 /** Every member of the closed set, for zero-filling per-outcome counts. */
 export const ITEM_OUTCOMES: readonly ItemOutcome[] = [
   'ok',
