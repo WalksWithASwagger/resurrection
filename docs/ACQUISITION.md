@@ -336,6 +336,14 @@ URL served, the provider's digest for the chosen capture and the local SHA-256
 of the bytes that arrived. It also carries every per-URL lookup issued and the
 index requests they cost, so a reader can see what asset resolution spent.
 
+`revisions` names the acquiring code and, when a fixture produced the run, that
+fixture. The code identity is the embedded `CODE_REVISION` constant (override
+with `--code-revision`); it is never read from `.git` at runtime. The fixture
+identity is the SHA-256 of the manifest file bytes, or `null` for a
+live-transport run — present, not omitted, and never a fabricated hash.
+Rebuilding a report for a cached collection reuses the recorded pair. Schema
+version 5 added this object; `JOB_STATE_VERSION` stays at 3.
+
 The report is portable: relative store paths, no operator filesystem layout, no
 credentials and no private collection URLs.
 

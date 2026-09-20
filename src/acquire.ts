@@ -25,9 +25,11 @@ import { discoverLinks, localPathFor, type LinkRelation } from './discover.ts';
 import {
   buildEvidenceReport,
   inventoryPartialReasons,
+  loadEvidenceRevisions,
   writeEvidenceReport,
   type EvidenceReport,
 } from './evidence.ts';
+import { CODE_REVISION, type EvidenceRevisions } from './revision.ts';
 import { fetchResource, type FetchContext } from './fetch-resource.ts';
 import {
   JOB_STATE_VERSION,
@@ -71,6 +73,16 @@ export interface AcquisitionOptions {
   resume?: boolean;
   /** Retry items that failed in an earlier run, when the failure was retryable. */
   retryFailed?: boolean;
+  /**
+   * Identity of the acquiring code. Defaults to the embedded `CODE_REVISION`.
+   * Never read from `.git`; pass a commit SHA here when a run should name one.
+   */
+  codeRevision?: string;
+  /**
+   * SHA-256 of the fixture manifest that produced this run, or null for a
+   * live-transport run. Omitted is treated as null, never as a fabricated hash.
+   */
+  fixtureRevision?: string | null;
 }
 
 export interface AcquisitionResult {
@@ -169,9 +181,26 @@ export async function runAcquisition(options: AcquisitionOptions): Promise<Acqui
   await classifyCollection(state, store, config.fidelity);
   await saveJob(directory, state);
 
-  const report = buildEvidenceReport(state, config);
+  const report = buildEvidenceReport(state, config, await revisionsFor(directory, options));
   const reportPath = await writeEvidenceReport(directory, report);
   return { state, report, reportPath };
+}
+
+/**
+ * Prefer revisions already on the evidence file. A resume or a later
+ * re-render of the same collection must keep naming the code that acquired
+ * it, even if the caller now holds a different `--code-revision`.
+ */
+async function revisionsFor(
+  directory: string,
+  options: Pick<AcquisitionOptions, 'codeRevision' | 'fixtureRevision'>,
+): Promise<EvidenceRevisions> {
+  const recorded = await loadEvidenceRevisions(directory);
+  if (recorded !== null) return recorded;
+  return {
+    code: options.codeRevision ?? CODE_REVISION,
+    fixture: options.fixtureRevision ?? null,
+  };
 }
 
 function newJobState(config: ProjectConfig, clock: Clock): JobState {

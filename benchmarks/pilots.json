@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "document_type": "pilot_plan",
-  "updated_at": "2026-09-12",
+  "updated_at": "2026-09-20",
   "implementation_status": "not_enforced_by_code",
   "engine_status": {
     "acquisition_core": "delivered_against_fixtures",
@@ -61,10 +61,10 @@
     "R2": "not_met",
     "R3": "not_met",
     "R4": "met",
-    "R5": "partly_met"
+    "R5": "met"
   },
   "readiness_notes": {
     "R4": "Missing-source, retry/resume, budget, untrusted-input and network-isolation tests pass.",
-    "R5": "The engine runs from configuration with no site-specific branches, but the evidence report carries no code or fixture revision field."
+    "R5": "The engine runs from configuration with no site-specific branches. evidence.json revisions records the embedded CODE_REVISION (overridable with --code-revision, never a runtime git lookup) and the SHA-256 of the fixture manifest, or null for a live run."
   }
 }

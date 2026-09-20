@@ -12,8 +12,9 @@
 
 import { runAcquisition, type ControlSignal } from './acquire.ts';
 import { loadProjectConfig } from './config.ts';
-import { buildEvidenceReport, summarize, writeEvidenceReport } from './evidence.ts';
+import { buildEvidenceReport, loadEvidenceRevisions, summarize, writeEvidenceReport } from './evidence.ts';
 import { createFixtureTransport, loadFixtureManifest } from './fixture-transport.ts';
+import { CODE_REVISION, fixtureRevisionFromPath } from './revision.ts';
 import { loadJob, type JobState } from './job.ts';
 import { reclassifyJob } from './reclassify.ts';
 import { DEFAULT_FIDELITY } from './fidelity.ts';
@@ -27,6 +28,8 @@ const USAGE = `resurrection — bounded archive acquisition
   acquire --config <file> --transport <fixture|live> [options]
     --fixture-manifest <file>     required with --transport fixture
     --confirm-live-acquisition    required with --transport live
+    --code-revision <id>          identity of the acquiring code (default: the
+                                  embedded constant; never read from .git)
     --output <dir>                override the config's outputDirectory
     --resume                      continue an existing job in the output dir
     --retry-failed                requeue retryable failures on resume
@@ -75,6 +78,7 @@ async function acquireCommand(flags: Record<string, string>): Promise<number> {
 
   let transport;
   let resolver;
+  let fixtureRevision: string | null = null;
   if (transportName === 'fixture') {
     const manifestPath = flags['fixture-manifest'];
     if (manifestPath === undefined) {
@@ -84,6 +88,7 @@ async function acquireCommand(flags: Record<string, string>): Promise<number> {
     const handle = createFixtureTransport(await loadFixtureManifest(manifestPath));
     transport = handle.transport;
     resolver = handle.resolver;
+    fixtureRevision = await fixtureRevisionFromPath(manifestPath);
   } else {
     if (flags['confirm-live-acquisition'] !== 'true') {
       process.stderr.write(
@@ -115,6 +120,8 @@ async function acquireCommand(flags: Record<string, string>): Promise<number> {
     resume: flags['resume'] === 'true',
     retryFailed: flags['retry-failed'] === 'true',
     signal,
+    codeRevision: flags['code-revision'] ?? CODE_REVISION,
+    fixtureRevision,
   });
 
   process.stdout.write(`${summarize(result.report)}\n`);
@@ -177,35 +184,44 @@ async function reclassifyCommand(flags: Record<string, string>): Promise<number>
  * selection policy and the candidate filters are likewise left at their
  * defaults: the report reads what was actually applied off the job's own
  * inventory runs and capture records, not off a config supplied here.
+ *
+ * Revisions are copied off the existing evidence file when it has them, so a
+ * later `report` or `reclassify` names the acquiring code rather than the
+ * current tree.
  */
 async function renderReport(
   state: JobState,
   directory: string,
   fidelity = DEFAULT_FIDELITY,
 ): Promise<void> {
-  const report = buildEvidenceReport(state, {
-    projectId: state.projectId,
-    scope: state.scope,
-    budgets: state.budgets,
-    provider: {
-      cdxEndpoint: '',
-      replayEndpoint: '',
-      allowedHosts: [],
-      minRequestIntervalMs: 0,
-      requestTimeoutMs: 0,
+  const recorded = await loadEvidenceRevisions(directory);
+  const report = buildEvidenceReport(
+    state,
+    {
+      projectId: state.projectId,
+      scope: state.scope,
+      budgets: state.budgets,
+      provider: {
+        cdxEndpoint: '',
+        replayEndpoint: '',
+        allowedHosts: [],
+        minRequestIntervalMs: 0,
+        requestTimeoutMs: 0,
+      },
+      discovery: { followRelations: [], followPageLinks: false },
+      selection: DEFAULT_SELECTION,
+      // Each resolved asset carries the window that was actually applied to it;
+      // this is only the section-level default for a job that resolved none.
+      assetResolution: DEFAULT_ASSET_RESOLUTION,
+      // Each score carries its own per-signal weights and its own band
+      // thresholds, so the report stays auditable even when this is the default
+      // and the job was scored under a project's own policy.
+      fidelity,
+      candidateFilters: [],
+      outputDirectory: directory,
     },
-    discovery: { followRelations: [], followPageLinks: false },
-    selection: DEFAULT_SELECTION,
-    // Each resolved asset carries the window that was actually applied to it;
-    // this is only the section-level default for a job that resolved none.
-    assetResolution: DEFAULT_ASSET_RESOLUTION,
-    // Each score carries its own per-signal weights and its own band
-    // thresholds, so the report stays auditable even when this is the default
-    // and the job was scored under a project's own policy.
-    fidelity,
-    candidateFilters: [],
-    outputDirectory: directory,
-  });
+    recorded ?? undefined,
+  );
   await writeEvidenceReport(directory, report);
   process.stdout.write(`${summarize(report)}\n`);
 }

@@ -70,6 +70,7 @@ export type { DiscoveredLink, LinkRelation } from './discover.ts';
 export {
   buildEvidenceReport,
   inventoryPartialReasons,
+  loadEvidenceRevisions,
   summarize,
   writeEvidenceReport,
   EVIDENCE_FILE,
@@ -87,6 +88,14 @@ export type {
   RecoveredFile,
   UnattemptedEntry,
 } from './evidence.ts';
+
+export {
+  defaultRevisions,
+  fixtureRevisionFromPath,
+  fixtureRevisionOf,
+  CODE_REVISION,
+} from './revision.ts';
+export type { EvidenceRevisions } from './revision.ts';
 
 export { fetchResource } from './fetch-resource.ts';
 export type { FetchContext, FetchResult, RequestKind } from './fetch-resource.ts';

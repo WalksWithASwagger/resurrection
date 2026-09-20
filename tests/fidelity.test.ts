@@ -393,7 +393,7 @@ test('the report carries the full per-signal breakdown, not only the composite',
   await withTempDirectory(async (directory) => {
     const { report } = await acquire(directory);
 
-    assert.equal(report.schemaVersion, 4);
+    assert.equal(report.schemaVersion, 5);
     assert.equal(report.fidelity.counts.scored, 1, 'only the one ok page is scored');
     const scored = report.fidelity.scored[0];
     assert.ok(scored !== undefined);
