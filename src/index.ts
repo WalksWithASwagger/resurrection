@@ -245,3 +245,149 @@ export {
   IFRAME_MODIFIER,
   REPLAY_MODIFIERS,
 } from './wayback.ts';
+
+export {
+  collectionFromJob,
+  inPeriod,
+  loadCollectionManifest,
+  siteKey,
+  COLLECTION_MANIFEST_VERSION,
+} from './collection.ts';
+export type { Collection, CollectionPeriod, CollectionResource } from './collection.ts';
+
+export {
+  buildSiteModel,
+  chooseByKey,
+  structuralSimilarity,
+  structuralSkeleton,
+  summarizeSiteModel,
+  visibleText,
+  writeSiteModel,
+  FAMILY_SIMILARITY_THRESHOLD,
+  SITE_MODEL_FILE,
+  SITE_MODEL_SCHEMA_VERSION,
+} from './site-model.ts';
+export type {
+  AssetOccurrence,
+  BodyReader,
+  ExternalDestination,
+  LinkTargetKind,
+  ModelAsset,
+  ModelFamily,
+  ModelGap,
+  ModelGapKind,
+  ModelLink,
+  ModelPage,
+  NavigationEdge,
+  SiteModel,
+  StaticFeature,
+  StaticFeatureKind,
+} from './site-model.ts';
+
+export {
+  buildReferenceBundle,
+  collectionResponder,
+  loadReferenceBundle,
+  selectReferencePages,
+  signOffReferenceBundle,
+  summarizeReferenceBundle,
+  verifyReferenceBundle,
+  DEFAULT_VIEWPORT,
+  MAX_ANCHORS_PER_PAGE,
+  REFERENCE_BUNDLE_FILE,
+  REFERENCE_SCHEMA_VERSION,
+  REFERENCE_SIGNOFF_FILE,
+} from './reference.ts';
+export type {
+  Anchor,
+  BuildReferenceOptions,
+  BundleVerification,
+  PageSelection,
+  Rect,
+  ReferenceBundle,
+  ReferenceRenderer,
+  ReferenceSignoff,
+  ReferenceState,
+  RenderConditions,
+  RenderRequest,
+  RenderResult,
+  RequestDisposition,
+  RequestRecord,
+  RequestResponder,
+  ResponderAnswer,
+} from './reference.ts';
+
+export { createChromiumRenderer } from './render-chromium.ts';
+
+export { compareImages, decodePng, encodePng } from './png.ts';
+export type { Image, PixelComparison } from './png.ts';
+
+export {
+  candidatePathOf,
+  candidateResponder,
+  candidateUrlFor,
+  loadCandidate,
+  CANDIDATE_ORIGIN,
+  CANDIDATE_SITE_DIRECTORY,
+  URL_MAP_FILE,
+  URL_MAP_SCHEMA_VERSION,
+} from './candidate.ts';
+export type { Candidate, UrlMapEntry } from './candidate.ts';
+
+export {
+  evaluateCandidate,
+  summarizeEvaluation,
+  DEFAULT_ACCEPTANCE,
+  EVALUATION_FILE,
+  EVALUATION_SCHEMA_VERSION,
+} from './evaluate.ts';
+export type {
+  AcceptanceThresholds,
+  CheckName,
+  CheckResult,
+  EvaluateOptions,
+  EvaluationReport,
+  StateEvaluation,
+  Verdict,
+} from './evaluate.ts';
+
+export {
+  summarizeGeneration,
+  transcribePage,
+  replaceTags,
+  transcribeSite,
+  GAP_DIRECTORY,
+  GENERATION_FILE,
+  GENERATION_SCHEMA_VERSION,
+} from './transcribe.ts';
+export type { GenerationRecord, PageTransformation, TranscribeOptions } from './transcribe.ts';
+
+export { createScriptedProvider } from './provider.ts';
+export type { ModelImage, ModelMessage, ModelProvider, ModelRequest, ModelResponse, ModelUsage, ScriptedAnswer } from './provider.ts';
+
+export {
+  extractDocument,
+  modernizeSite,
+  refreshDirectives,
+  rewriteBrief,
+  staticProblems,
+  submitRewrite,
+  summarizeSubmission,
+  SUBMISSIONS_DIRECTORY,
+  summarizeModernization,
+  DEFAULT_MODERNIZE_BUDGETS,
+  MODERNIZATION_FILE,
+  MODERNIZATION_SCHEMA_VERSION,
+  PROMPT_TEMPLATE_VERSION,
+} from './modernize.ts';
+export type {
+  AttemptRecord,
+  ModernizationRecord,
+  ModernizeBudgets,
+  ModernizedPage,
+  ModernizeOptions,
+  PageOutcome,
+  SubmissionRecord,
+  SubmissionResult,
+  SubmitOptions,
+} from './modernize.ts';

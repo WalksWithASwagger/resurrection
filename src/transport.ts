@@ -3,7 +3,7 @@
  *
  * Everything above this module is deterministic and testable without a
  * network. The only implementation here that can open a socket is
- * `createLiveTransport`, and nothing in the test suite constructs it.
+ * `createLiveTransport`, exercised against a loopback server in tests.
  *
  * The live transport uses `node:http`/`node:https` rather than `fetch` for one
  * reason: it can pin the connection to the addresses the destination guard
@@ -57,7 +57,11 @@ export function createLiveTransport(): HttpTransport {
           lookup:
             pinned.length === 0
               ? undefined
-              : (_hostname, _lookupOptions, callback) => {
+              : (_hostname, lookupOptions, callback) => {
+                  if (lookupOptions.all) {
+                    callback(null, pinned.map(address => ({ address, family: address.includes(':') ? 6 : 4 })));
+                    return;
+                  }
                   const address = pinned[0] as string;
                   callback(null, address, address.includes(':') ? 6 : 4);
                 },

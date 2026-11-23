@@ -39,8 +39,9 @@ import {
   type FidelityConfig,
   type FidelityContext,
 } from './fidelity.ts';
-import { isComplete, loadJob, saveJob, type JobState, type WorkItem } from './job.ts';
+import { isComplete, loadJob, reconcileWorkItems, saveJob, type JobState, type WorkItem } from './job.ts';
 import { zeroOutcomeCounts, type ItemOutcome } from './outcomes.ts';
+import { captureKey } from './resolve-asset.ts';
 import { BodyStore } from './store.ts';
 
 export interface ClassificationSummary {
@@ -128,7 +129,7 @@ export async function classifyCollection(
   }));
   const context: ClassificationContext = {
     templates: buildErrorTemplateIndex(observations),
-    capturedUrls: new Set(state.items.filter(isComplete).map((item) => item.originalUrl)),
+    capturedUrls: new Set(state.items.filter(isComplete).map((item) => captureKey(item.originalUrl))),
   };
 
   const counts = zeroOutcomeCounts();
@@ -195,7 +196,7 @@ function scoreClassifiedCollection(
         replacementRatio: item.encoding?.replacementRatio ?? 0,
         captures: item.capture.candidates,
         chosenTimestamp: item.capture.servedTimestamp ?? item.capture.requestedTimestamp,
-        assets: assetsByPage.get(item.originalUrl) ?? [],
+        assets: assetsByPage.get(captureKey(item.originalUrl)) ?? [],
       },
       context,
     );
@@ -220,9 +221,10 @@ function assetSummariesByPage(state: JobState): Map<string, AssetSummary[]> {
   for (const item of state.items) {
     const resolution = item.capture.resolution;
     if (resolution === null) continue;
-    const summaries = byPage.get(resolution.referringPageUrl) ?? [];
+    const key = captureKey(resolution.referringPageUrl);
+    const summaries = byPage.get(key) ?? [];
     summaries.push(summaryFor(item));
-    byPage.set(resolution.referringPageUrl, summaries);
+    byPage.set(key, summaries);
   }
   return byPage;
 }
@@ -255,6 +257,7 @@ export async function reclassifyJob(
   const state = await loadJob(directory);
   if (state === null) throw new Error(`no job found in ${directory}`);
 
+  reconcileWorkItems(state);
   const summary = await classifyCollection(state, new BodyStore(join(directory, 'store')), fidelityConfig);
   await saveJob(directory, state);
   return { state, summary };

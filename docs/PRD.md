@@ -5,7 +5,7 @@ Drafted 2026-09-06, saved here 2026-09-13.
 
 ## Provenance
 
-This is the product brief that started this repository. Kris asked how to
+This is the product brief that started this repository. The project owner asked how to
 build "the perfect modern agentic AI scraper in 2026" and sketched a PRD for a
 general-purpose tool: fetch a page, live or archived, escalate through
 fetch → headless → real browser only as needed, and return clean, offline-usable

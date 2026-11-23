@@ -189,3 +189,16 @@ test('decode.ts stays dependency-free, so a decode needs no network and no I/O',
 
   assert.deepEqual(imports, []);
 });
+
+test('a Western page with stray curly quotes and copyright signs is not detected as Shift_JIS', () => {
+  const body = new Uint8Array(
+    Buffer.from('<html><body><p>could first speak: \x93Guess what Og do?</p><p>Copyright \xa9 2000</p><p>copyright\xa9 1999</p></body></html>', 'latin1'),
+  );
+
+  const decoded = decodeBody(body, { contentType: 'text/html' });
+
+  assert.equal(decoded.chosenEncoding, 'windows-1252');
+  assert.equal(decoded.chosenSource, 'era-default');
+  assert.ok(decoded.text?.includes('“Guess what Og do?'));
+  assert.ok(decoded.text?.includes('Copyright © 2000'));
+});

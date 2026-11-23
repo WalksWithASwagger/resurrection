@@ -1,9 +1,14 @@
 # Implementation sequence
 
-Status: M1 delivered against fixtures. The acquisition core, its CLI and its
-evidence report exist and are verified; see [bounded acquisition](ACQUISITION.md).
-No live archive acquisition has been performed, no AI generator exists and no
-pilot has passed. M2 onward have not been started.
+Status: the first bounded live acquisition ran on 2026-11-19. It recovered
+three distinct UncleWeed pages from December 26, 2005. A targeted follow-up
+recovered their navigation and painting thumbnails. A second pass recovered ten more images. The three pages are available offline and in a hosted preview.
+M2 reference freezing, generation and independent comparison remain open.
+
+**Pilot order changed on 2026-11-23.** The owner made Spark Online the first
+site for M2 through M4 and asked for every surviving Spark issue. UncleWeed
+follows on the same engine. Live model calls need the owner's separate
+approval. See [SPEC section 12](SPEC.md#12-pilot-order-and-release-boundary).
 
 Milestone status is recorded per section below and mirrored in
 [the pilot declarations](../benchmarks/pilots.json).
@@ -12,20 +17,28 @@ Follow the [specification](SPEC.md). Each slice should produce a focused PR with
 
 ## M1: Bounded acquisition and portable evidence
 
-**Status: delivered against fixtures, except the live acquisition gate.**
-Shipped by #12, #14, #15, #16, #17 and #18. Everything below is implemented and
-covered by tests, and the work went past this milestone's original text: typed
-[outcome classification](OUTCOMES.md) (#5), per-asset capture resolution (#6),
-[pinned CDX query shape, replay modifiers and capture selection policy](ACQUISITION.md) (#7)
-and a [graded fidelity score](FIDELITY.md) (#8).
+**First live run, 2026-11-19.** The CLI queried Wayback for the homepage
+and requested the homepage, Words and Paint. It used 30 of 45 allowed requests,
+including all 12 index requests, and counted 230,690 bytes. It paused with
+11 queued items unattempted and zero fetch failures. The evidence lists 15
+validated records representing 14 distinct bodies: three HTML pages, one
+stylesheet and ten images. All recovered bodies have a December 26, 2005
+capture timestamp.
 
-**Remaining:** the small logged UncleWeed acquisition described at the end of
-this section. Fixture and fetch-isolation tests pass, so that gate is open, but
-the acquisition itself is a human-approved action under
-`safety.network_isolation` in `agentic/contract.json`. The CLI refuses a live
-run without `--transport live --confirm-live-acquisition`. Issue #3 stays open
-until it is performed.
+| Page | Served time (UTC) | Distinct directly referenced images recovered |
+| --- | --- | --- |
+| Homepage | 20:41:26 | 10 of 26 |
+| Words | 23:01:35 | 7 of 11 |
+| Paint | 23:42:00 | 7 of 14 |
 
+The inventory returned an explicit default port on the homepage URL. The seed
+omitted the port. The engine fetched both, counted four page records under a
+three-page configuration and assigned different scores to identical HTML.
+The repaired collector reconciles those records and applies one page budget to
+seeds, inventory and followed links. Reclassifying a copy of the collection
+produced three active page records, retained the alternate homepage fetch and
+made zero requests. The image counts above describe the first acquisition. The private collection holds the job, original
+bytes and per-item provenance.
 
 Build one TypeScript package with a CLI, a project configuration, a Wayback discovery/fetch adapter, persistent work items and a local content-addressed store. Preserve source queries, raw responses, requested/resolved capture times, outcomes and hashes. Recover linked documents and assets within an explicit budget.
 
@@ -35,8 +48,38 @@ Done when pause/resume retains completed work, budgets cover retries, hashes val
 
 ## M2: Frozen references and a site model
 
-**Status: not started.**
+**Offline review on 2026-11-19.** A second, Wayback-only pass recovered the
+three missing navigation GIFs and four painting thumbnails. It used 26 requests
+(seven index), 85,627 response bytes and 45 seconds. The shared GIFs came from
+December 26, 2005. Archived Flickr redirects led to February 21–22, 2007
+thumbnail bytes matching the four original identifiers, filenames and dimensions.
+The December 2005 thumbnail pixels remain unverified.
 
+A desktop browser rendered the local homepage, Words and Paint at 1024 × 768, with
+JavaScript disabled and zero external page requests. The respective pages
+loaded 14 of 26, 10 of 11 and 14 of 14 distinct image URLs. The three links
+between pilot pages worked from each page. Uncollected destinations have local
+gap notes. The private review bundle retains the complete image and link
+inventories, screenshots, and a standalone three-page ZIP. Reference sign-off
+and the site model remain pending.
+
+**Site model, 2026-11-23.** `resurrection model` builds the static half of
+the [site model](SITE-MODEL.md) from stored bodies: page inventory, page
+families, asset catalogue, navigation graph, static behavior evidence and
+gaps. It accepts a job directory or a portable collection manifest and makes
+no request. Run on the September 2000 Spark collection (71 resources) it
+found 37 pages in five families: the cover, the contents page, 17 articles,
+17 print editions and one figure page. It recorded 27 same-site links with
+no recovered target and five date exceptions.
+
+**Rendered references, 2026-11-23.** `resurrection reference` renders
+recovered pages in pinned Chromium with scripts off and every request
+answered from stored bytes, then writes a [reference bundle](REFERENCES.md):
+screenshots, measured anchors, text and request records, frozen by a digest
+and a human sign-off. For the same September issue it rendered one page per
+family (five states) with no missing and no external request, and a second
+run produced the same digest. No Spark bundle is signed off yet. Interactive
+states are not captured.
 
 From a bounded UncleWeed collection, select a coherent historical period and at least three representative pages. Record references and dependencies, identify page families, measure important layout anchors and write supported interaction contracts. Capture initial and relevant interactive states in an isolated environment.
 
@@ -44,7 +87,50 @@ Done when every reference has a source chain, rendering conditions and known gap
 
 ## M3: Generate, compare and repair one page family
 
-**Status: not started.** No AI generator or browser evaluator exists.
+**Evaluator, 2026-11-23.** `resurrection evaluate` renders a built candidate
+under a signed-off bundle's conditions and checks route, title, text, pixels,
+geometry, links and runtime. See [evaluation](EVALUATION.md). It is proven on
+synthetic pages: an identical candidate passes and a shifted, recoloured one
+fails its visual and geometry checks. The thresholds are uncalibrated.
+
+**Transcribing generator, 2026-11-23.** `resurrection generate` builds a
+candidate from the recovered markup with no model call. See
+[generation](GENERATION.md). For the September 2000 Spark issue it wrote 37
+pages and the evaluator passed all 37 states with no differing pixel, against
+an unsigned bundle. The first run failed two pages and exposed a decoder bug
+(a Western page read as Shift_JIS), now fixed. This proves the pipeline end
+to end; it is not newly written layout code.
+
+**Model-backed generator, 2026-11-23.** `resurrection modernize` asks a
+model to rewrite each referenced page in current HTML and CSS and keeps a
+rewrite only when the evaluator passes it; otherwise the transcribed page
+stays. It is proven against a scripted provider: pass, repair, exhausted
+attempts, refusal, budgets and refused setups. No live model call has been
+made. Layout tables are no longer measured anchors, so a rewrite may use
+different containers. The pass rate on real pages is unmeasured.
+
+**First live rewrites, 2026-11-23.** `brief` and `submit` open the same gate
+to any author, so rewrites can be written in a Claude Code session on a
+subscription instead of through the paid API. Trial on September 2000 Spark,
+one page per family (splash, contents, article, image page, print-friendly):
+5 of 5 accepted on the first submission, each with no differing pixel and
+every measured element within 2px, against an unsigned bundle. The splash
+rewrite had dropped the page's `meta refresh` and still passed; rewrites
+must now keep it, and that page was resubmitted with it restored. The paid
+API path has still made no live call.
+
+**Whole issue rewritten, 2026-11-23.** All 37 September 2000 pages were
+rewritten by agents in a Claude Code session and judged by `submit`: 32
+accepted on the first submission and 5 on the second, none exhausted. The
+assembled candidate evaluates `pass-against-unfrozen-reference` on all 37
+states. 29 are pixel-identical; 8 differ within the 1% tolerance, the largest
+0.44% (media/hansen.html), and one of those (miscing/english.html) had an
+unstable capture. Every measured element is within 2px, and its pages contain no table or font
+element. Second submissions were caught by the evaluator: a cell margin
+quirks mode drops, collapsed non-breaking spaces that changed wrapping, a
+missing trailing space, an unaligned header and a link box 8px off. Agents
+reused one accepted page per family as a template. The bundle is still
+unsigned.
 
 
 Implement the model adapter, constrained code-generation workspace, static output and independent browser evaluator. Recreate original layout and supported interactions with local assets. Add bounded repair iterations and frozen accepted source files.
@@ -64,7 +150,7 @@ Done when readiness conditions R1 through R5 below pass with retained evidence. 
 
 | ID | Required evidence | Status |
 | --- | --- | --- |
-| R1 | UncleWeed has a bounded, source-linked reference bundle and declared unresolved regions. | Not met. No acquisition has run. |
+| R1 | UncleWeed has a bounded, source-linked reference bundle and declared unresolved regions. | Open. Three pages rendered with a gap inventory. Reference selection and sign-off remain pending. |
 | R2 | All required scoped visual and interaction checks pass for the first pilot, with no unacknowledged critical mismatch. | Not met. Depends on M3. |
 | R3 | A clean export rebuilds and runs without archive/model calls or required remote assets. | Not met. No export step exists. |
 | R4 | Missing-source, retry/resume, budget, untrusted-input and network-isolation tests pass. | **Met.** Covered across `tests/`, including the isolation suite and a crafted-URL case. |
@@ -72,12 +158,30 @@ Done when readiness conditions R1 through R5 below pass with retained evidence. 
 
 These conditions measure engineering readiness. They do not introduce another user permission step.
 
-## M5: Spark Online, when ready
+## M5: Spark Online
 
-**Status: not started.** Blocked on R1 through R5.
+On November 19, 2026 the owner requested a bounded archive trial for
+`www.spark-online.com` during 1998–2001. This advanced second-site discovery
+while R1–R3 for the first pilot remained open. The archived catalog numbers
+October 1999 as issue 1.0. March 2000 (issue 6.0) had the largest editorial
+set among the issues with complete indexed first-party artwork in a comparison
+of 22 contents pages.
+The pass spent 160 Wayback requests, including 20 index requests, and received
+2,208,262 bytes. The recovered issue contains 51 historical HTML pages and
+33 images. Two site-owned thumbnail URLs have no indexed in-period captures.
+A follow-up reconstructed both sidebar thumbnails from the original cover artwork. The restored issue and offline export include all 26 stories and 23 linked print versions. See the [pilot record](../benchmarks/pilots.json) for coverage.
 
+May 2000, issue 8.0 ranked second. All 25 linked articles and all ten first-party contents images had in-window index records and replayed successfully. Its 25 print versions are included in the two-issue export. Both covers, contents pages and readers link the issues together.
 
-After R1 through R5 pass, inspect `spark-online.com` using approximately 1998 as the owner's requested starting point. Verify actual capture dates and site identity before fixing the test period. Do not substitute a later unrelated site if early evidence is absent.
+April 2000, issue 7.0 joins March and May on the same site. All 30 editorial links from the contents page open recovered stories. All 29 linked print versions and all 48 embedded first-party artwork URLs were recovered. One Trends essay has no located print edition. Two sidebar graphics and the full-size comic rely on later captures. The Visto advertisement is labelled and its tracking pixel is omitted.
+
+June 2000, issue 9.0 extends the published run to four consecutive issues. June includes all 21 articles, 21 verified print editions and both enlarged comic illustrations. All 57 first-party images used by the restored pages were recovered. The June gallery lists 12 works. Passing a Light plays locally and the remaining 11 are catalog entries. The enlarged comic comes from 2002 and the A/B music loops come from later copies of the original players.
+
+July 2000, issue 10.0 extends the published run to five consecutive issues. July includes all 21 editorial articles, all 21 linked print editions, and all 33 images referenced by its pages. Seven print editions use 2002 captures and one uses a 2003 capture. Their texts match the corresponding articles. July links to the shared gallery using the surviving June catalog, where 11 Flash or video works have catalog entries only.
+
+August 2000, issue 11.0 extends the published run to six consecutive issues. August includes all 19 stories, all 19 matching print editions and all 32 original images. All 19 article captures date to 2000. Fourteen print editions and seven images come from 2001. The two Chasing Sublimity links now open the same article. No August gallery catalog surfaced in the dated search, so the gallery link identifies the surviving June edition.
+
+September 2000, issue 12.0 extends the published run to seven consecutive issues. September includes all 17 articles, 17 text-matched print editions and 34 referenced images. The full-size 673 by 862 comic and three navigation or section graphics use 2002 captures. The full cover comes from 2006 and visually matches the earlier thumbnail. No September-dated shared gallery catalog was found.
 
 Run the same pipeline with a second project configuration. Record the actual structure and behaviors encountered rather than assuming them in advance. If it needs new support, add a general capability with fixtures and regression coverage instead of a Spark-specific engine fork.
 
@@ -85,13 +189,13 @@ Done when the second site's scoped fidelity report and portable export pass, or 
 
 ## Immediate assignment
 
-M1 is delivered against fixtures. R5 is met. One thing stands between here and
-M2:
+Spark first. Sign off a rendered reference bundle for one Spark issue. With
+the owner's approval, run a one-page-per-family model trial on that issue
+and record the pass rate. Build the clean export (R3). The UncleWeed reference
+decisions below wait until the engine has passed on Spark.
 
-1. **Perform the bounded UncleWeed acquisition** (issue #3). Human-approved,
-   logged and budget-bounded. An archive failure is a partial result, never a
-   substituted synthetic success.
-
-Then begin M2 from the acquired collection. Do not build account management,
-hosted billing, a redesigned site template, broad CMS integrations or the Spark
-Online recovery.
+Review the three offline renders and choose the regions to freeze for comparison.
+Decide whether the February 2007 painting thumbnails can serve as dated
+substitutions. Prioritize the missing homepage photographs and the linked
+documents needed for the scoped visitor journeys. The site model and independent
+reconstruction checks follow that reference decision.

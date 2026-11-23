@@ -209,9 +209,19 @@ function countReplacements(text: string): number {
   return count;
 }
 
-/** Characters only a correctly decoded CJK/Hangul body should contain. */
+/**
+ * A run of script characters only a correctly decoded CJK/Hangul body should
+ * contain.
+ *
+ * One such character is not enough. A windows-1252 body with a lone curly
+ * quote or copyright sign decodes without error under Shift_JIS, because the
+ * high byte and the ASCII byte after it form one valid double-byte character.
+ * Real CJK text has runs of them; a stray Western punctuation mark does not.
+ */
+const SCRIPT_PAYLOAD_RUN = 3;
+
 function hasMultiByteScriptPayload(text: string): boolean {
-  return /[　-〿぀-ヿ一-鿿가-힯！-｠]/.test(text);
+  return new RegExp(`[　-〿぀-ヿ一-鿿가-힯！-｠]{${SCRIPT_PAYLOAD_RUN}}`).test(text);
 }
 
 interface Detection {

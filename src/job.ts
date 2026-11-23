@@ -22,7 +22,7 @@ import type { ScopeConfig } from './config.ts';
 import type { LinkRelation } from './discover.ts';
 import type { FidelityScore } from './fidelity.ts';
 import type { Failure, ItemOutcome, OutcomeRecord, UnattemptedReason } from './outcomes.ts';
-import type { AssetResolution } from './resolve-asset.ts';
+import { captureKey, type AssetResolution } from './resolve-asset.ts';
 import type { CaptureCandidate, CaptureSelection } from './select.ts';
 
 export const JOB_FILE = 'job.json';
@@ -317,16 +317,54 @@ export interface JobState {
   /** Non-candidate captures, retained as evidence of when a URL changed. */
   timeline: TimelineEntry[];
   items: WorkItem[];
+  /** Historical records for aliases coalesced when continuing a legacy job. */
+  supersededItems?: WorkItem[];
   events: JobEvent[];
 }
 
 export function itemId(originalUrl: string): string {
-  return createHash('sha256').update(originalUrl).digest('hex').slice(0, 16);
+  return createHash('sha256').update(captureKey(originalUrl)).digest('hex').slice(0, 16);
 }
 
 export function findItem(state: JobState, originalUrl: string): WorkItem | undefined {
   const id = itemId(originalUrl);
   return state.items.find((item) => item.id === id);
+}
+
+/** Preserve earlier fetches and their provenance when upgrading legacy raw-URL IDs. */
+export function reconcileWorkItems(state: JobState): void {
+  const active = new Map<string, WorkItem>();
+  for (const item of state.items) {
+    const id = itemId(item.originalUrl);
+    const previous = active.get(id);
+    if (previous === undefined) {
+      active.set(id, item);
+      continue;
+    }
+    const history = state.supersededItems ??= [];
+    if (isComplete(item) && !isComplete(previous)) {
+      history.push(previous);
+      active.set(id, item);
+    } else {
+      history.push(item);
+    }
+  }
+  // Earlier resumes may already have moved an alias into history without merging its captures.
+  for (const alias of state.supersededItems ?? []) {
+    const survivor = active.get(itemId(alias.originalUrl));
+    if (survivor === undefined) continue;
+    const capture = survivor.capture;
+    const known = new Set(capture.candidates.map((candidate) => candidate.timestamp));
+    for (const candidate of alias.capture.candidates) {
+      if (!known.has(candidate.timestamp)) {
+        capture.candidates.push(candidate);
+        known.add(candidate.timestamp);
+      }
+    }
+    capture.alternatives = [...new Set([...capture.alternatives, ...alias.capture.alternatives])];
+  }
+  for (const [id, item] of active) item.id = id;
+  state.items = [...active.values()];
 }
 
 /** An item that already holds validated bytes is never attempted again. */

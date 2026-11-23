@@ -66,11 +66,13 @@ test('classification, scoring, selection and stripping cannot refetch, because n
   }
 });
 
-test('no test constructs the live transport or the system resolver', async () => {
+test('only the loopback integration test constructs the live transport and no test uses system DNS', async () => {
   for (const path of await sourceFiles(TESTS)) {
     if (path.endsWith('isolation.test.ts')) continue;
     const source = await readFile(path, 'utf8');
-    assert.doesNotMatch(source, /createLiveTransport/u, `${path} must not build the live transport`);
+    if (path !== join(TESTS, 'live-transport.test.ts')) {
+      assert.doesNotMatch(source, /createLiveTransport/u, `${path} must not build the live transport`);
+    }
     assert.doesNotMatch(source, /systemResolver/u, `${path} must not use the system resolver`);
   }
 });

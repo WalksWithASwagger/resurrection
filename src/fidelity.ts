@@ -40,6 +40,7 @@
  * and what it decides is whether a score exists.
  */
 
+import { captureKey } from './resolve-asset.ts';
 import { discoverLinks, type LinkRelation } from './discover.ts';
 import type { ItemOutcome } from './outcomes.ts';
 import type { CaptureCandidate } from './select.ts';
@@ -346,7 +347,8 @@ export function scoreItem(input: FidelityInput, context: FidelityContext): Fidel
   const score =
     appliedWeight === 0 ? 0 : signals.reduce((total, s) => total + s.contribution, 0) / appliedWeight;
   const band = bandFor(score, config.thresholds);
-  const override = config.overrides.find((entry) => entry.originalUrl === input.originalUrl) ?? null;
+  const pageKey = captureKey(input.originalUrl);
+  const override = config.overrides.find((entry) => captureKey(entry.originalUrl) === pageKey) ?? null;
 
   return {
     originalUrl: input.originalUrl,
@@ -413,9 +415,10 @@ function structureSignal(
   const lengthValue = clamp(bodyCharacters / context.config.tuning.bodyTextTarget);
 
   const links = discoverLinks(text, input.originalUrl).filter((link) => link.relation === 'link');
-  const resolving = links.filter(
-    (link) => link.resolvedUrl !== input.originalUrl && context.capturedUrls.has(link.resolvedUrl),
-  );
+  const pageKey = captureKey(input.originalUrl);
+  const resolving = links
+    .map((link) => captureKey(link.resolvedUrl))
+    .filter((target) => target !== pageKey && context.capturedUrls.has(target));
   // A collection that holds one page has nowhere for an internal link to
   // point, so the sub-check is dropped rather than scored 0 against a page
   // that could not have passed it.

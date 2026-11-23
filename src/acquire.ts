@@ -41,9 +41,11 @@ import { CODE_REVISION, type EvidenceRevisions } from './revision.ts';
 import { fetchResource, type FetchContext } from './fetch-resource.ts';
 import {
   JOB_STATE_VERSION,
+  findItem,
   isComplete,
   itemId,
   loadJob,
+  reconcileWorkItems,
   saveJob,
   type ArchiveInjectionRecord,
   type AssetLookup,
@@ -115,6 +117,13 @@ export async function runAcquisition(options: AcquisitionOptions): Promise<Acqui
     );
   }
   const state = existing ?? newJobState(config, clock);
+  if (existing !== null) {
+    reconcileWorkItems(state);
+    const existingPages = countKind(state, 'page');
+    if (existingPages > config.budgets.maxPages) {
+      throw new Error(`the job already contains ${existingPages} distinct pages; maxPages must cover them to resume`);
+    }
+  }
   state.runState = 'running';
   state.events.push({
     at: iso(clock),
@@ -158,13 +167,13 @@ export async function runAcquisition(options: AcquisitionOptions): Promise<Acqui
 
   let halted: 'paused' | 'cancelled' | null = null;
   try {
+    seedPageItems(state, config, clock);
     halted = await runInventory(state, config, context, store, clock);
     // Pure, and over candidates the inventory already returned, so it costs no
     // index request. Running it on every pass is what lets an operator change
     // the policy and resume to reselect for free.
     applyCaptureSelection(state, config);
     if (halted === null) {
-      seedPageItems(state, config, clock);
       halted = await runFetchLoop(state, config, context, store, clock, options.signal);
     }
     if (halted === null) {
@@ -334,7 +343,10 @@ async function runInventory(
     recordInventoryRows(state, config, verdicts, clock);
 
     if (page.resumeKey === null) return null;
-    if (countKind(state, 'page') >= config.budgets.maxPages) return null;
+    const pendingSeed = state.items.some(
+      (item) => item.discoveredFrom === 'configuration seedUrls' && item.capture.candidates.length === 0,
+    );
+    if (countKind(state, 'page') >= config.budgets.maxPages && !pendingSeed) return null;
     resumeKey = page.resumeKey;
   }
 }
@@ -362,7 +374,7 @@ function recordInventoryRows(
     const candidate = candidateFromRow(row, excludedBy);
     recordCapture(state, row.original, 'inventory', candidate);
     if (!seedsPageItem(row)) continue;
-    const existing = state.items.find((item) => item.id === itemId(row.original));
+    const existing = findItem(state, row.original);
     if (existing !== undefined) {
       if (!existing.capture.alternatives.includes(row.timestamp)) {
         existing.capture.alternatives.push(row.timestamp);
@@ -370,7 +382,7 @@ function recordInventoryRows(
       }
       continue;
     }
-    if (countKind(state, 'page') >= config.budgets.maxPages) return;
+    if (countKind(state, 'page') >= config.budgets.maxPages) continue;
     state.items.push(
       newItem({
         originalUrl: row.original,
@@ -472,7 +484,8 @@ export function applyCaptureSelection(state: JobState, config: ProjectConfig): v
 /** Configured seeds are selected even when the inventory did not reach them. */
 function seedPageItems(state: JobState, config: ProjectConfig, clock: Clock): void {
   for (const url of config.scope.seedUrls) {
-    if (state.items.some((item) => item.id === itemId(url))) continue;
+    if (countKind(state, 'page') >= config.budgets.maxPages) break;
+    if (findItem(state, url) !== undefined) continue;
     state.items.push(
       newItem({
         originalUrl: url,
@@ -1165,7 +1178,7 @@ function enqueueDependencies(
 
     const host = hostOf(link.resolvedUrl);
     if (host === null || !hosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`))) continue;
-    if (state.items.some((item) => item.id === itemId(link.resolvedUrl))) continue;
+    if (findItem(state, link.resolvedUrl) !== undefined) continue;
 
     const isPage = link.relation === 'link';
     if (isPage && countKind(state, 'page') >= config.budgets.maxPages) continue;
@@ -1209,21 +1222,7 @@ function newItem(input: {
   referringTimestamp?: string | null;
   at: string;
 }): WorkItem {
-  const candidates =
-    input.candidate !== undefined
-      ? [input.candidate]
-      : input.requestedTimestamp === null
-        ? []
-        : [
-            {
-              timestamp: input.requestedTimestamp,
-              digest: null,
-              statusCode: null,
-              mimetype: null,
-              length: null,
-              excludedBy: null,
-            },
-          ];
+  const candidates = input.candidate === undefined ? [] : [input.candidate];
 
   return {
     id: itemId(input.originalUrl),
@@ -1241,7 +1240,7 @@ function newItem(input: {
       servedTimestamp: null,
       distanceSeconds: null,
       replayModifier: replayModifierFor(input.relation),
-      alternatives: input.requestedTimestamp === null ? [] : [input.requestedTimestamp],
+      alternatives: candidates.map((candidate) => candidate.timestamp),
       candidates,
       selection: null,
       referringTimestamp: input.referringTimestamp ?? null,

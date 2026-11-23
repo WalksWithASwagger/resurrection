@@ -145,6 +145,9 @@ export function parseProjectConfig(value: unknown, source: string): ProjectConfi
   };
 
   const budgets: Budgets = { ...DEFAULT_BUDGETS, ...numberRecord(raw['budgets'], 'budgets', source) };
+  if (!Number.isSafeInteger(budgets.maxPages)) {
+    throw new Error(`project config ${source}: budgets.maxPages must be an integer`);
+  }
   for (const [key, limit] of Object.entries(budgets)) {
     if (!Number.isFinite(limit) || limit <= 0) {
       throw new Error(`project config ${source}: budgets.${key} must be a positive number`);

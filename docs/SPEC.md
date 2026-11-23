@@ -205,9 +205,11 @@ A successful product milestone is a bounded site that looks and works like its r
 
 ## 12. Pilot order and release boundary
 
+**Amendment, 23 November 2026.** The product owner reordered the pilots. Spark Online is now the first site the site model, generator and evaluator are built and proven on, and every surviving Spark issue is in scope. UncleWeed follows on the same engine. Live model calls for generation need the owner's separate approval; until then the generator runs against fixtures only. The paragraphs below record the original order and remain accurate as history. The readiness conditions still apply, read against Spark as the first pilot.
+
 UncleWeed.net is the first planned real pilot. Select and freeze its historical references before generation. The existing modern archive portal may supply leads, but its interface is not the historical visual ground truth. Public pilot fixtures require a source/publication decision separate from access to private research.
 
-The second site is **spark-online.com, approximately 1998**, as requested by the product owner. The date remains a hypothesis until captures are examined. No discovery, acquisition or reconstruction of this site is scheduled now.
+The second site is **www.spark-online.com, 1998–2001**, the historical URL and period supplied by the product owner. The owner authorized an early bounded acquisition on November 19, 2026. The roadmap records the result and the outstanding reference and evaluation work.
 
 Start that second pilot only after the first pilot has a passing scoped fidelity report, a clean reproducible export and a reusable implementation without site-name branches. Infrastructure tests for interruption, missing evidence and hostile inputs must also pass. These are engineering readiness conditions, not recurring permission requests. Once satisfied, proceed with the configured second-site discovery and verify its available era.
 

@@ -466,12 +466,9 @@ the contract's `safety.network_isolation` rule made mechanical: a live provider
 call is a human-approved, logged, bounded action, not something a run can do by
 leaving a flag off.
 
-The first such acquisition against the first pilot has **not** been performed.
-It is a human decision, and its actual result — including a provider failure,
-which stays a partial result rather than being replaced with synthetic success
-— belongs in the pull request that performs it.
+The first bounded UncleWeed acquisition ran on 2026-11-19. See the
+[roadmap](ROADMAP.md) for the recovered scope, budget stop and reference gaps.
 
-## Deliberately not here
+## Subsequent stages
 
-- A fidelity score (issue #8), the site model (M2), generation (M3) and the
-  workbench (M4).
+Site modeling (M2), generation (M3) and the workbench (M4) follow acquisition.
