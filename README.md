@@ -24,7 +24,7 @@ Every recovered item retains a source reference. Missing evidence stays visible.
 
 ## Requirements
 
-- Node.js 22.18 or later. The package runs its TypeScript sources directly, with no build step, and relies on the type stripping that Node enables by default from 22.18.
+- Node.js 22.18 or later. The package runs its TypeScript sources directly, with no build step, and relies on the type stripping that Node enables by default from 22.18. Use the current 22.x release or 24: Node 22.18.0 itself decodes windows-1252 bytes 0x80 to 0x9F (curly quotes, dashes, the ellipsis) as raw control characters, which breaks decoding of many older pages and fails four tests.
 - pnpm 10.
 - Optional, for `reference`, `evaluate` and the browser tests: a Chromium build for `playwright-core` (`pnpm exec playwright-core install chromium`). Without it those tests are skipped, not failed.
 - Optional, only for `modernize`: an Anthropic API key in `ANTHROPIC_API_KEY`. The SDK reads it from the environment; Resurrection never reads or prints it.
