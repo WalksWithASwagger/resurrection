@@ -16,7 +16,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ['22.18.0', '24']
+        # Current 22.x, not the 22.18.0 floor: 22.18.0 mis-decodes windows-1252
+        # bytes 0x80-0x9F (see README, Requirements).
+        node: ['22', '24']
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
