@@ -221,3 +221,30 @@ test('a folder URL and its index file share one file when their bytes match, and
     await loadCandidate(edited.output);
   });
 });
+
+test('a page served as HTML from a script name gets an .html file name', async () => {
+  await withTempDirectory(async (directory) => {
+    const bodies: [string, string][] = [
+      ['http://www.demo.invalid/cgi/board.cgi', '<html><body><a href="board.cgi?forum=2">two</a></body></html>'],
+      ['http://www.demo.invalid/cgi/board.cgi?forum=2', '<html><body><a href="/cgi/board.cgi">home</a></body></html>'],
+    ];
+    const resources = [];
+    for (const [index, [url, body]] of bodies.entries()) {
+      const path = join(directory, 'bytes', `${index}.bin`);
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, body);
+      resources.push({ originalUrl: url, path, contentType: 'text/html', servedTimestamp: '20000615120000', sha256: sha256(new Uint8Array(Buffer.from(body))) });
+    }
+    await writeFile(join(directory, 'collection.json'), JSON.stringify({ schemaVersion: 1, id: 'demo', period: null, resources }));
+    const collection = await loadCollectionManifest(join(directory, 'collection.json'));
+    const output = join(directory, 'candidate');
+    await transcribeSite({ collection, model: await buildSiteModel(collection), outputDirectory: output });
+
+    const candidate = await loadCandidate(output);
+    const paths = [...candidate.keyByPath.keys()].sort();
+    assert.equal(paths.length, 2);
+    assert.ok(paths.every((path) => /^cgi\/board(__q[0-9a-f]+)?\.cgi\.html$/.test(path)), paths.join(' '));
+    const home = await readFile(join(output, 'site/cgi/board.cgi.html'), 'utf8');
+    assert.match(home, /<a href="board__q[0-9a-f]+\.cgi\.html">two<\/a>/);
+  });
+});
