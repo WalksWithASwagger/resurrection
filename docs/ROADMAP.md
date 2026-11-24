@@ -133,6 +133,31 @@ missing trailing space, an unaligned header and a link box 8px off. Agents
 reused one accepted page per family as a template. The bundle is still
 unsigned.
 
+**Every recovered Spark issue rewritten, 2026-11-23.** 24 issues (October
+1999 to issue 25, 871 pages; March 2000 was not recovered and issues 26 and
+27 survive only in 2002 captures) were rebuilt, referenced, transcribed and
+then rewritten by agents in a Claude Code session through `submit`, one
+agent per issue, at most three at once. Every issue's assembled candidate
+evaluates `pass-against-unfrozen-reference` on all its states. 867 pages are
+rewritten (760 on the first submission); 4 used all three submissions and
+keep their transcription. 524 states are pixel-identical; the rest differ
+within the 1% tolerance, the worst by 0.98%. Agents built table-to-grid
+converters from reference measurements, and some pages hard-code measured
+row heights. Running the later issues found four engine faults, fixed
+before any rewrite: placeholder images for missing resources moved layout,
+folder and index URLs sharing a file broke link checks, undeclared pages
+rendered in a guessed encoding, and tags were split at a `>` inside quotes.
+No bundle is signed off.
+
+**Top-up after the final recovery pass, 2026-11-23.** The recovery
+session's last pass added pages to six issues and stories for issues 26 and
+27, which survive only in captures from early 2002 (each with recorded
+provenance). Those six issues were rebuilt and their accepted rewrites
+resubmitted unchanged; 8 needed only links repointed from gap notices to
+newly recovered pages, and one needed a recovered image. Totals across 26
+issues: 923 pages, 919 rewritten, every issue passing all its states, 576
+pixel-identical, worst 0.98%. March 2000 was never recovered.
+
 **Gallery, home and forum rebuilt, 2026-11-23.** The three collections
 outside the issue folders were rebuilt by transcription, with no model
 call, and evaluated against unsigned references. Gallery: 41 of 41 pages
