@@ -56,10 +56,42 @@
         "R5"
       ],
       "readiness_status": "not_evaluated",
-      "discovery_status": "issue_contents_compared",
-      "validation_status": "offline_and_public_navigation_checked",
-      "notes": "The owner requested a bounded second-site trial before the first pilot’s fidelity gates were complete. Spark’s recovered issue catalog identifies October 1999 as issue 1.0. Across 22 compared contents pages, March 2000, issue 6.0, had index entries for all 26 directly linked story pages and all 11 first-party contents image/stylesheet URLs. Archive coverage varies by year. The private collection includes the cover, contents, all 26 stories, all 23 linked print versions, 32 of 34 directly referenced site images and the larger linked cartoon. Both missing sidebar thumbnails were reconstructed from original cover artwork. The preview labels the unavailable third-party ad and omits the tracking pixel. All 51 historical HTML documents passed offline browser checks. May 2000 placed second in the same 22-issue comparison. Its archived contents linked 25 editorial pages and used ten first-party visuals. All 35 resources replayed. Both covers and the original cross-issue links work offline and from the same Vercel site. The April follow-up recovered all 30 stories and all 11 contents images, including resources missed in the original index comparison. All 29 linked print versions and all 48 embedded first-party artwork URLs were recovered. One Trends essay has no located print edition. Two sidebar graphics and the full-size comic rely on later captures. The Visto advertisement is labelled and its tracking pixel is omitted. June includes all 21 articles, 21 verified print editions and both enlarged comic illustrations. All 57 first-party images used by the restored pages were recovered. The June gallery lists 12 works. Passing a Light plays locally and the remaining 11 are catalog entries. The enlarged comic comes from 2002 and the A/B music loops come from later copies of the original players. July includes all 21 editorial articles, all 21 linked print editions, and all 33 images referenced by its pages. Seven print editions use 2002 captures and one uses a 2003 capture. Their texts match the corresponding articles. July links to the shared gallery using the surviving June catalog, where 11 Flash or video works have catalog entries only. August includes all 19 stories, all 19 matching print editions and all 32 original images. All 19 article captures date to 2000. Fourteen print editions and seven images come from 2001. The two Chasing Sublimity links now open the same article. No August gallery catalog surfaced in the dated search, so the gallery link identifies the surviving June edition. September includes all 17 articles, 17 text-matched print editions and 34 referenced images. The full-size 673 by 862 comic and three navigation or section graphics use 2002 captures. The full cover comes from 2006 and visually matches the earlier thumbnail. No September-dated shared gallery catalog was found.",
+      "discovery_status": "every_issue_walked_from_cover_and_contents",
+      "validation_status": "offline_link_checked_and_public_sample_checked",
+      "notes": "The owner requested a bounded second-site trial before the first pilot’s fidelity gates were complete. Spark’s recovered issue catalog identifies October 1999 as issue 1.0. Across 22 compared contents pages, March 2000, issue 6.0, had index entries for all 26 directly linked story pages and all 11 first-party contents image/stylesheet URLs. Archive coverage varies by year. The private collection includes the cover, contents, all 26 stories, all 23 linked print versions, 32 of 34 directly referenced site images and the larger linked cartoon. Both missing sidebar thumbnails were reconstructed from original cover artwork. The preview labels the unavailable third-party ad and omits the tracking pixel. All 51 historical HTML documents passed offline browser checks. May 2000 placed second in the same 22-issue comparison. Its archived contents linked 25 editorial pages and used ten first-party visuals. All 35 resources replayed. Both covers and the original cross-issue links work offline and from the same Vercel site. The April follow-up recovered all 30 stories and all 11 contents images, including resources missed in the original index comparison. All 29 linked print versions and all 48 embedded first-party artwork URLs were recovered. One Trends essay has no located print edition. Two sidebar graphics and the full-size comic rely on later captures. The Visto advertisement is labelled and its tracking pixel is omitted. June includes all 21 articles, 21 verified print editions and both enlarged comic illustrations. All 57 first-party images used by the restored pages were recovered. The June gallery lists 12 works. Passing a Light plays locally and the remaining 11 are catalog entries. The enlarged comic comes from 2002 and the A/B music loops come from later copies of the original players. July includes all 21 editorial articles, all 21 linked print editions, and all 33 images referenced by its pages. Seven print editions use 2002 captures and one uses a 2003 capture. Their texts match the corresponding articles. July links to the shared gallery using the surviving June catalog, where 11 Flash or video works have catalog entries only. August includes all 19 stories, all 19 matching print editions and all 32 original images. All 19 article captures date to 2000. Fourteen print editions and seven images come from 2001. The two Chasing Sublimity links now open the same article. No August gallery catalog surfaced in the dated search, so the gallery link identifies the surviving June edition. September includes all 17 articles, 17 text-matched print editions and 34 referenced images. The full-size 673 by 862 comic and three navigation or section graphics use 2002 captures. The full cover comes from 2006 and visually matches the earlier thumbnail. No September-dated shared gallery catalog was found. On 2026-11-23 the remaining 20 issues (1.0 to 5.0 and 13.0 to 27.0) were recovered, one bounded collection per issue, each within 210 requests, 22 index requests and 32 MB. They hold 320 of 321 linked stories and 253 of 255 linked print versions. One December 1999 story link returns 404; one print version each in January 2000 and issue 19.0 was never archived. 166 items come from 2002 to 2010 captures that passed the exact-path and text-match checks; 21 of those are 2002 captures accepted because their own title names the issue version, and are labelled. Issue months for 19.0 to 27.0 are read from the recovered page titles. Folder index lookups never answered for November 1999 and issues 21.0, 23.0 and 26.0, so unlinked files in those folders are unknown. The discussion board, the digital gallery and the home and masthead pages were collected the same way. Across the 28 collections the run spent 3,173 requests, 117 of them index requests, and about 44 MB. All 27 issues and those sections were assembled into one static site at the original paths by a one-off script that reuses the September sanitizer. It did not go through generate or evaluate and has no reference bundle.",
       "published_issues": [
+        {
+          "issue": "1.0",
+          "publication_month": "1999-10",
+          "articles": 31,
+          "print_versions": 0
+        },
+        {
+          "issue": "2.0",
+          "publication_month": "1999-11",
+          "articles": 28,
+          "print_versions": 1
+        },
+        {
+          "issue": "3.0",
+          "publication_month": "1999-12",
+          "articles": 32,
+          "print_versions": 27,
+          "articles_linked": 33
+        },
+        {
+          "issue": "4.0",
+          "publication_month": "2000-01",
+          "articles": 25,
+          "print_versions": 23,
+          "print_versions_linked": 24
+        },
+        {
+          "issue": "5.0",
+          "publication_month": "2000-02",
+          "articles": 26,
+          "print_versions": 26
+        },
         {
           "issue": "6.0",
           "publication_month": "2000-03",
@@ -101,8 +133,130 @@
           "publication_month": "2000-09",
           "articles": 17,
           "print_versions": 17
+        },
+        {
+          "issue": "13.0",
+          "publication_month": "2000-10",
+          "articles": 16,
+          "print_versions": 16
+        },
+        {
+          "issue": "14.0",
+          "publication_month": "2000-11",
+          "articles": 19,
+          "print_versions": 19
+        },
+        {
+          "issue": "15.0",
+          "publication_month": "2000-12",
+          "articles": 15,
+          "print_versions": 15
+        },
+        {
+          "issue": "16.0",
+          "publication_month": "2001-01",
+          "articles": 15,
+          "print_versions": 14
+        },
+        {
+          "issue": "17.0",
+          "publication_month": "2001-02",
+          "articles": 14,
+          "print_versions": 14
+        },
+        {
+          "issue": "18.0",
+          "publication_month": "2001-03",
+          "articles": 14,
+          "print_versions": 14
+        },
+        {
+          "issue": "19.0",
+          "publication_month": "2001-04",
+          "articles": 13,
+          "print_versions": 12,
+          "print_versions_linked": 13
+        },
+        {
+          "issue": "20.0",
+          "publication_month": "2001-05",
+          "articles": 10,
+          "print_versions": 10
+        },
+        {
+          "issue": "21.0",
+          "publication_month": "2001-06",
+          "articles": 8,
+          "print_versions": 8
+        },
+        {
+          "issue": "22.0",
+          "publication_month": "2001-07",
+          "articles": 9,
+          "print_versions": 9
+        },
+        {
+          "issue": "23.0",
+          "publication_month": "2001-08",
+          "articles": 8,
+          "print_versions": 8
+        },
+        {
+          "issue": "24.0",
+          "publication_month": "2001-09",
+          "articles": 8,
+          "print_versions": 8
+        },
+        {
+          "issue": "25.0",
+          "publication_month": "2001-10",
+          "articles": 10,
+          "print_versions": 10
+        },
+        {
+          "issue": "26.0",
+          "publication_month": "2001-11",
+          "articles": 9,
+          "print_versions": 9
+        },
+        {
+          "issue": "27.0",
+          "publication_month": "2001-12",
+          "articles": 10,
+          "print_versions": 10
         }
-      ]
+      ],
+      "other_collections": [
+        {
+          "id": "discussion-board",
+          "thread_pages": 476,
+          "captured_1999_to_2001": 221,
+          "captured_2002_to_2003": 255,
+          "linked_threads_returning_404": 37
+        },
+        {
+          "id": "digital-gallery",
+          "images": 86,
+          "images_linked": 92,
+          "flash_works_not_playable": 7
+        },
+        {
+          "id": "home-and-masthead",
+          "images": 128,
+          "images_linked": 137
+        }
+      ],
+      "assembled_site": {
+        "date": "2026-11-23",
+        "pages": 1535,
+        "graphics": 991,
+        "pages_from_captures_after_2001": 328,
+        "image_references_never_archived": 161,
+        "internal_links_unresolved": 0,
+        "built_by": "one_off_script_outside_engine",
+        "reference_bundle": "none",
+        "visual_check": "four_pages_by_eye"
+      }
     }
   ],
   "readiness_status": {

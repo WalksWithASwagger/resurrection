@@ -6,8 +6,9 @@ recovered their navigation and painting thumbnails. A second pass recovered ten 
 M2 reference freezing, generation and independent comparison remain open.
 
 **Pilot order changed on 2026-11-23.** The owner made Spark Online the first
-site for M2 through M4 and asked for every surviving Spark issue. UncleWeed
-follows on the same engine. Live model calls need the owner's separate
+site for M2 through M4 and asked for every surviving Spark issue. All 27
+are now recovered; see [M5](#m5-spark-online). UncleWeed follows on the same
+engine. Live model calls need the owner's separate
 approval. See [SPEC section 12](SPEC.md#12-pilot-order-and-release-boundary).
 
 Milestone status is recorded per section below and mirrored in
@@ -183,13 +184,53 @@ August 2000, issue 11.0 extends the published run to six consecutive issues. Aug
 
 September 2000, issue 12.0 extends the published run to seven consecutive issues. September includes all 17 articles, 17 text-matched print editions and 34 referenced images. The full-size 673 by 862 comic and three navigation or section graphics use 2002 captures. The full cover comes from 2006 and visually matches the earlier thumbnail. No September-dated shared gallery catalog was found.
 
+**Every surviving issue, 2026-11-23.** The remaining 20 issues were recovered
+with the September method, one bounded collection per issue: October 1999 to
+February 2000 (1.0 to 5.0) and October 2000 to December 2001 (13.0 to 27.0).
+Each collection stayed inside 210 requests, 22 index requests and 32 MB. The
+20 collections hold 1,207 items: 320 of 321 linked stories and 253 of 255
+linked print versions. One December 1999 story link returns 404 and two print
+versions were never archived. 166 items come from 2002 to 2010 captures that
+passed the exact-path and text-match checks. 21 of those are 2002 captures
+accepted because their own title names the issue version; the magazine was
+still publishing in early 2002, so parts of issues 21 to 27 exist only that
+way. They are labelled and can be filtered out.
+
+At a pace of 650 ms the Wayback Machine refused connections after about 60
+requests in a minute. The pace was raised to 1,600 ms with a 90-second pause
+after a refusal and a stop after three. Folder index lookups never answered
+for November 1999 and issues 21, 23 and 26, so unlinked files in those four
+folders are unknown.
+
+The discussion board, the digital gallery and the home and masthead pages
+were collected the same way. The board holds 476 thread pages: 221 captured
+from 1999 to 2001 and 255 captured in 2002 and 2003, while the board was
+still live. 37 linked threads return 404, and the reply, profile and search
+forms were never archived. The gallery pages hold 86 of 92 linked images;
+its seven Flash works do not play. Shared artwork under two site folders
+exists only as 2024 captures, made after the domain lapsed, and was
+rejected. Across the 28 collections the run spent 3,173 requests, 117 of
+them index requests, and about 44 MB.
+
+All 27 issues, the board, the gallery and the masthead were then assembled
+into one static site: 1,535 pages and 991 graphics at their original paths,
+with scripts removed and forms inert. Every internal link and image
+reference resolves, checked with exact letter case. 328 pages come from
+captures made after 2001 and are recorded as such. 161 image references
+point at graphics that were never archived and show a labelled placeholder.
+This site was assembled by a one-off script that reuses the September
+sanitizer. It did not go through `generate` or `evaluate`, has no reference
+bundle and was checked by eye on four pages only. Replacing it with engine
+output is the remaining M5 work.
+
 Run the same pipeline with a second project configuration. Record the actual structure and behaviors encountered rather than assuming them in advance. If it needs new support, add a general capability with fixtures and regression coverage instead of a Spark-specific engine fork.
 
 Done when the second site's scoped fidelity report and portable export pass, or when a precise evidence/support limitation is documented. A sparse archive may support only a partial reconstruction; that is a valid finding, not a reason to invent missing material.
 
 ## Immediate assignment
 
-Spark first. Sign off a rendered reference bundle for one Spark issue. With
+Spark first. All 27 issues are recovered and assembled outside the engine.
+Sign off a rendered reference bundle for one Spark issue. With
 the owner's approval, run a one-page-per-family model trial on that issue
 and record the pass rate. Build the clean export (R3). The UncleWeed reference
 decisions below wait until the engine has passed on Spark.
