@@ -85,6 +85,10 @@ function sitePathFor(key: string, singleHost: boolean): string {
  * recovered with the same bytes they share it. When the bytes differ, as when
  * a cover was edited between captures, the explicit file keeps the plain name
  * and the folder URL gets its own, so neither recovered version is lost.
+ *
+ * A page served as HTML from a name that does not say so, such as a `.cgi`
+ * script, gets `.html` appended: a static host picks the content type from
+ * the file name and would otherwise offer the page as a download.
  */
 function assignPaths(keys: readonly string[], chosen: ReadonlyMap<string, CollectionResource>, singleHost: boolean): Map<string, string> {
   const pathByKey = new Map<string, string>();
@@ -92,6 +96,7 @@ function assignPaths(keys: readonly string[], chosen: ReadonlyMap<string, Collec
   const ordered = [...keys.filter((key) => !key.endsWith('/')), ...keys.filter((key) => key.endsWith('/'))];
   for (const key of ordered) {
     let path = sitePathFor(key, singleHost);
+    if (/html/i.test(chosen.get(key)?.contentType ?? '') && !/\.html?$/i.test(path)) path += '.html';
     const holder = occupant.get(path);
     if (holder !== undefined && chosen.get(holder)?.sha256 !== chosen.get(key)?.sha256) {
       const dot = path.lastIndexOf('.');

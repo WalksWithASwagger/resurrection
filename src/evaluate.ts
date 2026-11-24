@@ -19,6 +19,7 @@ import { candidatePathOf, candidateResponder, candidateUrlFor, loadCandidate, ty
 import { siteKey } from './collection.ts';
 import { compareImages, decodePng, encodePng } from './png.ts';
 import {
+  MAX_ANCHORS_PER_PAGE,
   loadReferenceBundle,
   verifyReferenceBundle,
   type Anchor,
@@ -269,7 +270,9 @@ async function evaluateState(
     ),
   );
 
-  checks.push(geometryCheck(state.anchors, result.anchors.map((anchor) => ({ ...anchor, rect: roundRect(anchor.rect) })), acceptance.anchorTolerancePx));
+  // The reference keeps at most MAX_ANCHORS_PER_PAGE anchors, so the candidate is cut at the same point.
+  const candidateAnchors = result.anchors.slice(0, MAX_ANCHORS_PER_PAGE).map((anchor) => ({ ...anchor, rect: roundRect(anchor.rect) }));
+  checks.push(geometryCheck(state.anchors, candidateAnchors, acceptance.anchorTolerancePx));
   checks.push(linksCheck(state.anchors, result.anchors, candidate));
   checks.push(runtimeCheck(result));
 

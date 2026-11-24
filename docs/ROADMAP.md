@@ -133,6 +133,18 @@ missing trailing space, an unaligned header and a link box 8px off. Agents
 reused one accepted page per family as a template. The bundle is still
 unsigned.
 
+**Gallery, home and forum rebuilt, 2026-11-23.** The three collections
+outside the issue folders were rebuilt by transcription, with no model
+call, and evaluated against unsigned references. Gallery: 41 of 41 pages
+pass, 40 pixel-identical. Home and masthead: 18 of 18, all pixel-identical.
+Forum: 502 of 502, 500 pixel-identical, worst 0.89%. The forum needed two
+general fixes: a page served as HTML from a script name such as
+`Ultimate.cgi` now gets an `.html` file name, and the evaluator cuts the
+candidate's anchors at the same 1,500 cap the reference uses, which three
+long threads exceed. The forum's 43,716 links to reply, profile and search
+forms that were never archived lead to 25,484 gap notices. None of these
+pages has been rewritten into modern markup.
+
 
 Implement the model adapter, constrained code-generation workspace, static output and independent browser evaluator. Recreate original layout and supported interactions with local assets. Add bounded repair iterations and frozen accepted source files.
 
