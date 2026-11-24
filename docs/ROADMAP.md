@@ -167,8 +167,20 @@ general fixes: a page served as HTML from a script name such as
 `Ultimate.cgi` now gets an `.html` file name, and the evaluator cuts the
 candidate's anchors at the same 1,500 cap the reference uses, which three
 long threads exceed. The forum's 43,716 links to reply, profile and search
-forms that were never archived lead to 25,484 gap notices. None of these
-pages has been rewritten into modern markup.
+forms that were never archived lead to 25,484 gap notices.
+
+**Gallery, home and forum rewritten, 2026-11-23.** Coding agents rewrote
+the same 561 pages in modern HTML and CSS through the submit gate, with
+three attempts per page. Gallery: 41 of 41 rewritten, with no layout tables
+left. Home and masthead: 17 of 18; the awards page used its three attempts
+and keeps its transcription. Forum: 499 of 502 accepted, 479 on the first
+attempt, from one converter that uses an HTML5 tree builder so misnested
+board markup parses as Chromium parses it. A full evaluation then failed
+the control panel frameset: the accepted rewrite of `controlpanel.html`
+passed alone at 1024px but broke inside the frameset's narrower frame.
+That file keeps its transcription, so 498 forum pages use rewrites. All
+561 states pass, worst 0.92%. The gate checks a page only on its own;
+checking the framesets that embed a submitted page is open work.
 
 
 Implement the model adapter, constrained code-generation workspace, static output and independent browser evaluator. Recreate original layout and supported interactions with local assets. Add bounded repair iterations and frozen accepted source files.
