@@ -269,8 +269,28 @@ captures made after 2001 and are recorded as such. 161 image references
 point at graphics that were never archived and show a labelled placeholder.
 This site was assembled by a one-off script that reuses the September
 sanitizer. It did not go through `generate` or `evaluate`, has no reference
-bundle and was checked by eye on four pages only. Replacing it with engine
-output is the remaining M5 work.
+bundle and was checked by eye on four pages only.
+
+**Engine output assembled and published, 2026-11-26.** The rewritten pages
+of all 29 collections were laid over that site at its original paths:
+1,482 of its 1,535 pages are now engine output. The other 53 are March
+2000, which the per-issue recovery never collected (its pages come from the
+first pilot), the generated issue list and the list of missing destinations. Every image and stylesheet a rewrite uses is
+byte-identical to the copy already on the site. Links that led to a gap
+notice now lead to the recovered page when another collection holds it.
+The assembled site was then evaluated as one candidate against all 29
+unsigned bundles: 1,484 of 1,484 states pass on a single candidate
+digest, 627 pixel-identical, the worst 0.98%. Assembly exposed four
+faults that no per-collection run could see, all fixed before publishing.
+A link's fragment was lost when its gap notice was replaced by a page. A
+folder URL and its index page can be two files on the site, so both now
+map to one page. A frame showing an unrecovered page must keep its own
+notice. One accepted rewrite had pointed a gap link at a different page
+than the original did; the gate passes any gap, so this needs a rule
+that a rewrite's gap links keep the original target. The published site
+masks personal e-mail addresses and sets its content security policy as a
+response header, leaving page bytes as evaluated. No bundle is signed off
+and there is still no export step.
 
 Run the same pipeline with a second project configuration. Record the actual structure and behaviors encountered rather than assuming them in advance. If it needs new support, add a general capability with fixtures and regression coverage instead of a Spark-specific engine fork.
 
@@ -278,10 +298,11 @@ Done when the second site's scoped fidelity report and portable export pass, or 
 
 ## Immediate assignment
 
-Spark first. All 27 issues are recovered and assembled outside the engine.
-Sign off a rendered reference bundle for one Spark issue. With
-the owner's approval, run a one-page-per-family model trial on that issue
-and record the pass rate. Build the clean export (R3). The UncleWeed reference
+Spark first. All 27 issues are recovered, rewritten through the submit
+gate and published as engine output. Sign off a rendered reference bundle
+for one Spark issue. Make the gate check that a rewrite's gap links keep
+their original targets, and check framesets that embed a submitted page.
+Build the clean export (R3). The paid-API path still has no live trial. The UncleWeed reference
 decisions below wait until the engine has passed on Spark.
 
 Review the three offline renders and choose the regions to freeze for comparison.
