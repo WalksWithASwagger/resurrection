@@ -65,7 +65,7 @@ The MIT [licence](LICENSE) covers Resurrection's code and documentation. It gran
 
 | Order | Site | Status |
 | --- | --- | --- |
-| 1 | www.spark-online.com, 1998–2001 | All 27 issues, October 1999 to December 2001 (1.0 to 27.0), recovered with their articles, print versions and first-party images, plus 476 discussion-board threads, the digital gallery pages and the masthead. Rebuilt as one static site of 1,535 pages at the original addresses and link-checked offline. That rebuild is a one-off script, not yet the engine's generate and evaluate loop. See [M5](docs/ROADMAP.md#m5-spark-online). |
+| 1 | www.spark-online.com, 1998–2001 | All 27 issues, October 1999 to December 2001 (1.0 to 27.0), recovered with their articles, print versions and first-party images, plus 476 discussion-board threads, the digital gallery pages and the masthead. Rebuilt as one static site of 1,535 pages at the original addresses. 1,482 of them are now engine rewrites, and the assembled site passes the evaluator on all 1,484 states against unsigned references. See [M5](docs/ROADMAP.md#m5-spark-online). |
 | 2 | UncleWeed.net | The homepage, Words and Paint pages from December 2005, then 21 more pages and 13 original PDFs from dated captures, rendered offline. |
 
 The pilot order changed on 2026-11-23; see the [implementation sequence](docs/ROADMAP.md). Coverage counts and known gaps are in the [pilot record](benchmarks/pilots.json).
